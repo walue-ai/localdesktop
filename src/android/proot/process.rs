@@ -36,38 +36,26 @@ impl ArchProcess {
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
             .arg("--link2symlink")
-            .arg("--bind=/dev")
-            .arg("--bind=/proc")
-            .arg("--bind=/sys")
-            .arg(format!("--bind={}/tmp:/dev/shm", config::ARCH_FS_ROOT))
+            .arg("--bind=/dev/null:/proc/sys/kernel/cap_last_cap")
+            .arg("--bind=/dev/null:/proc/sys/fs/inotify/max_user_watches")
             .arg("--bind=/dev/urandom:/dev/random")
             .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
-            .arg("/usr/bin/env")
-            .arg("-i");
+            .arg("/bin/bash")
+            .arg("-l");
 
-        let home = if self.user == "root" {
-            "HOME=/root".to_string()
+        if self.user != "root" {
+            process.env("USER", &self.user);
+            process.env("LOGNAME", &self.user);
+            process.env("HOME", format!("/home/{}", self.user));
         } else {
-            format!("HOME=/home/{}", self.user)
-        };
-        process.arg(home);
-
-        process
-            .arg("LANG=C.UTF-8")
-            .arg("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
-            .arg("TMPDIR=/tmp")
-            .arg(format!("USER={}", self.user))
-            .arg(format!("LOGNAME={}", self.user));
-        if self.user == "root" {
-            process.arg("sh");
-        } else {
-            process
-                .arg("runuser")
-                .arg("-u")
-                .arg(&self.user)
-                .arg("--")
-                .arg("sh");
+            process.env("USER", "root");
+            process.env("LOGNAME", "root");
+            process.env("HOME", "/root");
         }
+        
+        process.env("LANG", "C.UTF-8");
+        process.env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin");
+        process.env("TMPDIR", "/tmp");
         let child = process
             .arg("-c")
             .arg(&self.command)
