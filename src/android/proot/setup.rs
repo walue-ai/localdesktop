@@ -53,7 +53,7 @@ type StageOutput = Option<JoinHandle<()>>;
 
 fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
     let context = get_application_context();
-    let temp_file = context.data_dir.join("archlinux-fs.tar.xz");
+    let temp_file = Path::new(ARCH_FS_ROOT).parent().unwrap().join("archlinux-fs.tar.xz");
     let fs_root = Path::new(ARCH_FS_ROOT);
     let extracted_dir = Path::new(ARCH_FS_ROOT).parent().unwrap().join("archlinux-aarch64");
     let mpsc_sender = options.mpsc_sender.clone();
@@ -127,7 +127,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
                 let mut archive = Archive::new(tar);
 
                 // Try to extract, if it fails, remove temp file and restart download
-                if let Err(e) = archive.unpack(context.data_dir.clone()) {
+                if let Err(e) = archive.unpack(Path::new(ARCH_FS_ROOT).parent().unwrap()) {
                     // Clean up the failed extraction
                     let _ = fs::remove_dir_all(&extracted_dir);
                     let _ = fs::remove_file(&temp_file);
