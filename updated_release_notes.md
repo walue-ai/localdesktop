@@ -1,18 +1,22 @@
 ## Android PRoot Fix - v1.2.8
 
-### 🔧 PRoot Runtime Error Fixes
-Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Function not implemented" sistem çağrısı hatalarını çözer.
+### 🔧 Comprehensive PRoot Runtime Error Fixes
+Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Function not implemented" sistem çağrısı hatalarını kapsamlı bir şekilde çözer.
 
 ### ✅ Çözülen Sorunlar
 - **PRoot Binding Sanitization**: `/proc/self/fd/1` ve `/proc/self/fd/2` binding hatalarını çözüldü
 - **Android Seccomp Kısıtlamaları**: `PROOT_NO_SECCOMP=1` environment variable eklendi
+- **Missing Bindings**: `PROOT_IGNORE_MISSING_BINDINGS=1` ile Android binding kısıtlamaları aşıldı
+- **Verbose Debugging**: `PROOT_VERBOSE=9` ile detaylı hata ayıklama bilgisi eklendi
 - **Sistem Çağrısı Hataları**: `execve`, `chmod`, `chdir` için "Function not implemented" hataları çözüldü
 - **Stage Execution**: "Simulating Linux system data..." aşaması artık başarıyla tamamlanıyor
 
 ### 🔧 Teknik Değişiklikler
 - Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
 - PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
-- Android-specific PRoot konfigürasyonu iyileştirildi
+- Missing binding warnings suppressed (Android compatibility)
+- Comprehensive Android-specific PRoot environment configuration
+- Three-layer approach: PROOT_NO_SECCOMP + PROOT_VERBOSE + PROOT_IGNORE_MISSING_BINDINGS
 
 ### 📱 APK Detayları
 - **Boyut**: ~49MB

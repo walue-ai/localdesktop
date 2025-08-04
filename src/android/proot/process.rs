@@ -29,6 +29,8 @@ impl ArchProcess {
             .env("PROOT_LOADER", proot_loader)
             .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
             .env("PROOT_NO_SECCOMP", "1")
+            .env("PROOT_VERBOSE", "9")
+            .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
