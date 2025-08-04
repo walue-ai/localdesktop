@@ -1,4 +1,4 @@
-## Android PRoot Compatibility Fix - v1.2.15
+## Android PRoot Compatibility Fix - v1.2.16
 
 ### 🔧 Fundamental Android PRoot Compatibility Fix
 Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uyumluluk sorununu çözer. Root privilege emulation'ı kaldırarak Android app sandbox kısıtlamaları içinde çalışmasını sağlar.
@@ -20,7 +20,7 @@ Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uy
 - **Android Namespace Kısıtlamaları**: `--kill-on-exit` ve `--sysvipc` namespace taklit işlemleri kaldırıldı
 - **F2FS Uyumluluğu**: `--link2symlink` aktif bırakıldı (F2FS filesystem için gerekli)
 - **Alternatif Dizin Kullanımı**: ARCH_FS_ROOT `/data/local/tmp/arch` olarak değiştirildi (F2FS yerine daha uyumlu konum)
-- **Comprehensive Permission ve Cross-Device Link Fix**: Temp file cache_dir'de, extraction ise data_dir'de yapılarak hem permission denied hem de cross-device link hataları tamamen çözüldü
+- **Complete Filesystem Consistency Fix**: ARCH_FS_ROOT data_dir filesystem'ine geri alınarak temp file (cache_dir), extraction (data_dir), final destination (data_dir) tüm işlemler tutarlı filesystem'de yapılarak cross-device link hataları tamamen çözüldü
 - **PRoot-Userland Variant**: libproot-userland.so kullanılarak Android app sandbox uyumluluğu sağlandı
 - Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
 - PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
