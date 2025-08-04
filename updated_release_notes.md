@@ -1,7 +1,7 @@
-## Android PRoot Fix - v1.2.9
+## Android PRoot Compatibility Fix - v1.2.10
 
-### 🔧 Comprehensive PRoot Runtime Error Fixes
-Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Function not implemented" sistem çağrısı hatalarını kapsamlı bir şekilde çözer.
+### 🔧 Fundamental Android PRoot Compatibility Fix
+Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uyumluluk sorununu çözer. Root privilege emulation'ı kaldırarak Android app sandbox kısıtlamaları içinde çalışmasını sağlar.
 
 ### ✅ Çözülen Sorunlar
 - **PRoot Binding Sanitization**: `/proc/self/fd/1` ve `/proc/self/fd/2` binding hatalarını çözüldü
@@ -11,9 +11,14 @@ Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Funct
 - **Sistem Çağrısı Hataları**: `execve`, `chmod`, `chdir` için "Function not implemented" hataları çözüldü
 - **F2FS Filesystem Uyumluluğu**: Android cihazlarda f2fs filesystem compatibility sorunları çözüldü
 - **PRoot Binding Optimizasyonu**: Android güvenlik kısıtlamaları nedeniyle problematik /proc binding'leri kaldırıldı
+- **Root Privilege Removal**: Android app sandbox uyumluluğu için --root-id flag'i kaldırıldı
 - **Stage Execution**: "Simulating Linux system data..." aşaması artık başarıyla tamamlanıyor
 
 ### 🔧 Teknik Değişiklikler
+- **Temel Sorun**: `--root-id` flag'i fake_id0 extension'ını aktifleştiriyordu ve bu Android'in güvenlik modeliyle çelişiyordu
+- **Çözüm**: Root privilege emulation tamamen kaldırıldı, PRoot artık Android app sandbox içinde çalışıyor
+- **Android Namespace Kısıtlamaları**: `--kill-on-exit` ve `--sysvipc` namespace taklit işlemleri kaldırıldı
+- **F2FS Uyumluluğu**: `--link2symlink` aktif bırakıldı (F2FS filesystem için gerekli)
 - Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
 - PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
 - Missing binding warnings suppressed (Android compatibility)
@@ -44,4 +49,4 @@ APK dosyasını Android cihazınıza indirip yükleyebilirsiniz. Bu sürüm, ön
 ---
 **Link to Devin run**: https://app.devin.ai/sessions/a782075c682b42c7ab9cd8ae1a602d66
 **Requested by**: @walue-dev
-**Fixed Issues**: PRoot binding sanitization errors, Android seccomp restrictions, system call failures
+**Fixed Issues**: PRoot binding sanitization errors, Android seccomp restrictions, system call failures, root privilege emulation conflicts
