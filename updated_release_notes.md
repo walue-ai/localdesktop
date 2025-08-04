@@ -9,14 +9,16 @@ Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Funct
 - **Missing Bindings**: `PROOT_IGNORE_MISSING_BINDINGS=1` ile Android binding kısıtlamaları aşıldı
 - **Verbose Debugging**: `PROOT_VERBOSE=9` ile detaylı hata ayıklama bilgisi eklendi
 - **Sistem Çağrısı Hataları**: `execve`, `chmod`, `chdir` için "Function not implemented" hataları çözüldü
+- **F2FS Filesystem Uyumluluğu**: Android cihazlarda f2fs filesystem compatibility sorunları çözüldü
 - **Stage Execution**: "Simulating Linux system data..." aşaması artık başarıyla tamamlanıyor
 
 ### 🔧 Teknik Değişiklikler
 - Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
 - PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
 - Missing binding warnings suppressed (Android compatibility)
+- F2FS filesystem compatibility workaround enabled (Android filesystem issues)
 - Comprehensive Android-specific PRoot environment configuration
-- Three-layer approach: PROOT_NO_SECCOMP + PROOT_VERBOSE + PROOT_IGNORE_MISSING_BINDINGS
+- Four-layer approach: PROOT_NO_SECCOMP + PROOT_VERBOSE + PROOT_IGNORE_MISSING_BINDINGS + PROOT_F2FS_WORKAROUND
 
 ### 📱 APK Detayları
 - **Boyut**: ~49MB

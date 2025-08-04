@@ -31,6 +31,7 @@ impl ArchProcess {
             .env("PROOT_NO_SECCOMP", "1")
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
+            .env("PROOT_F2FS_WORKAROUND", "1")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
