@@ -24,7 +24,7 @@ impl ArchProcess {
         #[cfg(test)]
         let proot_loader = "/data/local/tmp/libproot_loader.so";
 
-        let mut process = Command::new(context.native_library_dir.join("libproot.so"));
+        let mut process = Command::new(context.native_library_dir.join("libproot-userland.so"));
         process
             .env("PROOT_LOADER", proot_loader)
             .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
@@ -151,7 +151,7 @@ impl ArchProcess {
                 let mut error_output = String::new();
                 let mut reader = BufReader::new(stderr);
                 reader.read_to_string(&mut error_output).unwrap();
-                if error_output.contains("fatal error: see `libproot.so --help`") {
+                if error_output.contains("fatal error: see `libproot-userland.so --help`") {
                     panic!("PRoot error: {}", error_output);
                 }
             }

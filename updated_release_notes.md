@@ -1,4 +1,4 @@
-## Android PRoot Compatibility Fix - v1.2.10
+## Android PRoot Compatibility Fix - v1.2.11
 
 ### 🔧 Fundamental Android PRoot Compatibility Fix
 Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uyumluluk sorununu çözer. Root privilege emulation'ı kaldırarak Android app sandbox kısıtlamaları içinde çalışmasını sağlar.
@@ -19,6 +19,8 @@ Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uy
 - **Çözüm**: Root privilege emulation tamamen kaldırıldı, PRoot artık Android app sandbox içinde çalışıyor
 - **Android Namespace Kısıtlamaları**: `--kill-on-exit` ve `--sysvipc` namespace taklit işlemleri kaldırıldı
 - **F2FS Uyumluluğu**: `--link2symlink` aktif bırakıldı (F2FS filesystem için gerekli)
+- **Alternatif Dizin Kullanımı**: ARCH_FS_ROOT `/data/local/tmp/arch` olarak değiştirildi (F2FS yerine daha uyumlu konum)
+- **PRoot-Userland Variant**: libproot-userland.so kullanılarak Android app sandbox uyumluluğu sağlandı
 - Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
 - PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
 - Missing binding warnings suppressed (Android compatibility)
@@ -33,7 +35,7 @@ Bu release, Android cihazlarda PRoot'un %40'ta takılmasına neden olan temel uy
 - **Build Türü**: Debug
 - **Native Kütüphaneler**: 
   - liblocaldesktop.so
-  - libproot.so, libproot_loader.so
+  - libproot-userland.so, libproot_loader.so
   - libxkbcommon.so
 
 ### 🔧 Teknik Özellikler
