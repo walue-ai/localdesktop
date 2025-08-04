@@ -28,6 +28,7 @@ impl ArchProcess {
         process
             .env("PROOT_LOADER", proot_loader)
             .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
+            .env("PROOT_NO_SECCOMP", "1")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
@@ -40,10 +41,6 @@ impl ArchProcess {
             .arg("--bind=/sys")
             .arg(format!("--bind={}/tmp:/dev/shm", config::ARCH_FS_ROOT))
             .arg("--bind=/dev/urandom:/dev/random")
-            .arg("--bind=/proc/self/fd:/dev/fd")
-            .arg("--bind=/proc/self/fd/0:/dev/stdin")
-            .arg("--bind=/proc/self/fd/1:/dev/stdout")
-            .arg("--bind=/proc/self/fd/2:/dev/stderr")
             .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", config::ARCH_FS_ROOT))
             .arg(format!("--bind={}/proc/.stat:/proc/stat", config::ARCH_FS_ROOT))
             .arg(format!("--bind={}/proc/.uptime:/proc/uptime", config::ARCH_FS_ROOT))

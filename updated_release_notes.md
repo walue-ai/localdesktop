@@ -1,0 +1,39 @@
+## Android PRoot Fix - v1.2.8
+
+### 🔧 PRoot Runtime Error Fixes
+Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Function not implemented" sistem çağrısı hatalarını çözer.
+
+### ✅ Çözülen Sorunlar
+- **PRoot Binding Sanitization**: `/proc/self/fd/1` ve `/proc/self/fd/2` binding hatalarını çözüldü
+- **Android Seccomp Kısıtlamaları**: `PROOT_NO_SECCOMP=1` environment variable eklendi
+- **Sistem Çağrısı Hataları**: `execve`, `chmod`, `chdir` için "Function not implemented" hataları çözüldü
+- **Stage Execution**: "Simulating Linux system data..." aşaması artık başarıyla tamamlanıyor
+
+### 🔧 Teknik Değişiklikler
+- Android güvenlik kısıtlamaları nedeniyle problematik `/proc/self/fd` binding'leri kaldırıldı
+- PRoot seccomp filtering'i devre dışı bırakıldı (Android uyumluluğu için)
+- Android-specific PRoot konfigürasyonu iyileştirildi
+
+### 📱 APK Detayları
+- **Boyut**: ~49MB
+- **Mimari**: ARM64 (aarch64-linux-android)
+- **Build Türü**: Debug
+- **Native Kütüphaneler**: 
+  - liblocaldesktop.so
+  - libproot.so, libproot_loader.so
+  - libxkbcommon.so
+
+### 🔧 Teknik Özellikler
+- Arch Linux ARM64 filesystem desteği
+- PRoot chroot sistemi (Android uyumlu)
+- Wayland compositor
+- Xwayland desteği
+- XFCE4 masaüstü ortamı
+
+### 📋 Kurulum
+APK dosyasını Android cihazınıza indirip yükleyebilirsiniz. Bu sürüm, önceki sürümde yaşanan PRoot runtime hatalarını çözer ve uygulama artık Android cihazınızda düzgün çalışmalıdır.
+
+---
+**Link to Devin run**: https://app.devin.ai/sessions/a782075c682b42c7ab9cd8ae1a602d66
+**Requested by**: @walue-dev
+**Fixed Issues**: PRoot binding sanitization errors, Android seccomp restrictions, system call failures
