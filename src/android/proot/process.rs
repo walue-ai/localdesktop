@@ -27,7 +27,7 @@ impl ArchProcess {
         let mut process = Command::new(context.native_library_dir.join("libproot-userland.so"));
         process
             .env("PROOT_LOADER", proot_loader)
-            .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
+            .env("PROOT_TMP_DIR", "/data/data/app.polarbear/cache")
             .env("PROOT_NO_SECCOMP", "1")
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
