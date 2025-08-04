@@ -55,7 +55,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
     let context = get_application_context();
     let temp_file = context.data_dir.join("archlinux-fs.tar.xz");
     let fs_root = Path::new(ARCH_FS_ROOT);
-    let extracted_dir = context.data_dir.join("archlinux-aarch64");
+    let extracted_dir = Path::new(ARCH_FS_ROOT).parent().unwrap().join("archlinux-aarch64");
     let mpsc_sender = options.mpsc_sender.clone();
 
     // Only run if the fs_root is missing or empty
