@@ -4,6 +4,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use log;
 
 pub type Log = Box<dyn Fn(String)>;
 
@@ -32,6 +33,7 @@ impl ArchProcess {
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
+            .arg("-v5")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
@@ -42,6 +44,8 @@ impl ArchProcess {
             .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
             .arg("/bin/bash")
             .arg("-l");
+
+        log::info!("Launching PRoot with envs: {:?}", process.get_envs().collect::<Vec<_>>());
 
         if self.user != "root" {
             process.env("USER", &self.user);
