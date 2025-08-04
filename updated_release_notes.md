@@ -1,4 +1,4 @@
-## Android PRoot Fix - v1.2.8
+## Android PRoot Fix - v1.2.9
 
 ### 🔧 Comprehensive PRoot Runtime Error Fixes
 Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Function not implemented" sistem çağrısı hatalarını kapsamlı bir şekilde çözer.
@@ -10,6 +10,7 @@ Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Funct
 - **Verbose Debugging**: `PROOT_VERBOSE=9` ile detaylı hata ayıklama bilgisi eklendi
 - **Sistem Çağrısı Hataları**: `execve`, `chmod`, `chdir` için "Function not implemented" hataları çözüldü
 - **F2FS Filesystem Uyumluluğu**: Android cihazlarda f2fs filesystem compatibility sorunları çözüldü
+- **PRoot Binding Optimizasyonu**: Android güvenlik kısıtlamaları nedeniyle problematik /proc binding'leri kaldırıldı
 - **Stage Execution**: "Simulating Linux system data..." aşaması artık başarıyla tamamlanıyor
 
 ### 🔧 Teknik Değişiklikler
@@ -19,9 +20,10 @@ Bu release, Android cihazlarda PRoot binding sanitization hatalarını ve "Funct
 - F2FS filesystem compatibility workaround enabled (Android filesystem issues)
 - Comprehensive Android-specific PRoot environment configuration
 - Four-layer approach: PROOT_NO_SECCOMP + PROOT_VERBOSE + PROOT_IGNORE_MISSING_BINDINGS + PROOT_F2FS_WORKAROUND
+- Removed problematic /proc bindings: .loadavg, .stat, .uptime, .version, .vmstat, .sysctl_* files
 
 ### 📱 APK Detayları
-- **Boyut**: ~49MB
+- **Boyut**: 51MB
 - **Mimari**: ARM64 (aarch64-linux-android)
 - **Build Türü**: Debug
 - **Native Kütüphaneler**: 
