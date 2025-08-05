@@ -269,6 +269,24 @@ fi
                     let _ = fs::set_permissions(&env_path, fs::Permissions::from_mode(0o755));
                 }
             }
+
+            // Create /bin/sh if it doesn't exist - essential for PRoot shell execution
+            let sh_path = fs_root.join("bin/sh");
+            if !sh_path.exists() {
+                // Create a simple shell script that acts as sh
+                let sh_script = r#"#!/system/bin/sh
+# Simple sh replacement for Android/PRoot environment
+# Forward all arguments to the system shell
+exec /system/bin/sh "$@"
+"#;
+                let _ = fs::write(&sh_path, sh_script)
+                    .pb_expect("Failed to create /bin/sh");
+                
+                #[cfg(unix)]
+                {
+                    let _ = fs::set_permissions(&sh_path, fs::Permissions::from_mode(0o755));
+                }
+            }
         }));
     }
     None
