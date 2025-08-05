@@ -34,13 +34,13 @@ impl ArchProcess {
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
             .arg("-r")
-            .arg(config::ARCH_FS_ROOT)
+            .arg(config::VOID_FS_ROOT)
             .arg("-L")
             .arg("--link2symlink")
             .arg("--bind=/dev/null:/proc/sys/kernel/cap_last_cap")
             .arg("--bind=/dev/null:/proc/sys/fs/inotify/max_user_watches")
             .arg("--bind=/dev/urandom:/dev/random")
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::VOID_FS_ROOT))
             .arg("/bin/bash")
             .arg("-l");
 
@@ -169,7 +169,7 @@ mod tests {
         log::info!("Output: {}", String::from_utf8_lossy(&output.stdout));
         assert!(String::from_utf8_lossy(&output.stdout)
             .to_lowercase()
-            .contains("arch"));
+            .contains("void"));
     }
 
     #[test]
@@ -190,14 +190,14 @@ mod tests {
 
     #[test]
     fn should_exit_with_success_code() {
-        let process = ArchProcess::exec("pacman -Ss chrome");
+        let process = ArchProcess::exec("xbps-query -Rs chrome");
         let status = process.wait().expect("Failed to wait for process");
         assert_eq!(status.success(), true);
     }
 
     #[test]
     fn should_exit_with_fail_code() {
-        let process = ArchProcess::exec("pacman -Qg plasmma");
+        let process = ArchProcess::exec("xbps-query -s plasmma");
         let status = process.wait().expect("Failed to wait for process");
         assert_ne!(status.success(), true);
     }
