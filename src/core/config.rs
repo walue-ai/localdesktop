@@ -13,7 +13,7 @@ pub const VOID_FS_ROOT: &str = "/data/data/app.polarbear/files/void";
 #[cfg(test)]
 pub const VOID_FS_ROOT: &str = "/data/local/tmp/void";
 
-pub const VOID_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.25.0/void-aarch64-pd-v4.25.0.tar.xz";
+pub const VOID_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/void-aarch64-pd-v4.22.1.tar.xz";
 
 pub const WAYLAND_SOCKET_NAME: &str = "wayland-0";
 
