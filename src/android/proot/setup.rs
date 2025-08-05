@@ -9,7 +9,7 @@ use crate::{
         utils::application_context::get_application_context,
     },
     core::{
-        config::{CommandConfig, VOID_FS_ARCHIVE, VOID_FS_ROOT},
+        config::{CommandConfig, ARCH_FS_ARCHIVE, ARCH_FS_ROOT},
         logging::PolarBearExpectation,
     },
 };
@@ -65,11 +65,11 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
     Ok(())
 }
 
-fn setup_void_fs(options: &SetupOptions) -> StageOutput {
+fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
     let context = get_application_context();
-    let temp_file = context.cache_dir.join("void-fs.tar.xz");
-    let fs_root = Path::new(VOID_FS_ROOT);
-    let extracted_dir = context.data_dir.join("void-aarch64");
+    let temp_file = context.cache_dir.join("archlinux-fs.tar.xz");
+    let fs_root = Path::new(ARCH_FS_ROOT);
+    let extracted_dir = context.data_dir.join("archlinux-aarch64");
     let mpsc_sender = options.mpsc_sender.clone();
 
     // Only run if the fs_root is missing or empty
@@ -82,16 +82,16 @@ fn setup_void_fs(options: &SetupOptions) -> StageOutput {
                 if !temp_file.exists() {
                     mpsc_sender
                         .send(SetupMessage::Progress(
-                            "Downloading Void Linux FS...".to_string(),
+                            "Downloading Arch Linux FS...".to_string(),
                         ))
                         .pb_expect("Failed to send log message");
 
-                    let response = reqwest::blocking::get(VOID_FS_ARCHIVE)
-                        .pb_expect("Failed to download Void Linux FS");
+                    let response = reqwest::blocking::get(ARCH_FS_ARCHIVE)
+                        .pb_expect("Failed to download Arch Linux FS");
 
                     let total_size = response.content_length().unwrap_or(0);
                     let mut file = File::create(&temp_file)
-                        .pb_expect("Failed to create temp file for Void Linux FS");
+                        .pb_expect("Failed to create temp file for Arch Linux FS");
 
                     let mut downloaded = 0u64;
                     let mut buffer = [0u8; 8192];
@@ -115,7 +115,7 @@ fn setup_void_fs(options: &SetupOptions) -> StageOutput {
                                 let total_mb = total_size as f64 / 1024.0 / 1024.0;
                                 mpsc_sender
                                     .send(SetupMessage::Progress(format!(
-                                        "Downloading Void Linux FS... {}% ({:.2} MB / {:.2} MB)",
+                                        "Downloading Arch Linux FS... {}% ({:.2} MB / {:.2} MB)",
                                         percent, downloaded_mb, total_mb
                                     )))
                                     .unwrap_or(());
@@ -148,7 +148,7 @@ fn setup_void_fs(options: &SetupOptions) -> StageOutput {
 
                     mpsc_sender
                         .send(SetupMessage::Error(format!(
-                            "Failed to extract Void Linux FS: {}. Restarting download...",
+                            "Failed to extract Arch Linux FS: {}. Restarting download...",
                             e
                         )))
                         .unwrap_or(());
@@ -177,7 +177,7 @@ fn setup_void_fs(options: &SetupOptions) -> StageOutput {
 }
 
 fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
-    let fs_root = Path::new(VOID_FS_ROOT);
+    let fs_root = Path::new(ARCH_FS_ROOT);
     let mpsc_sender = options.mpsc_sender.clone();
 
     if !fs_root.join("proc/.version").exists() {
@@ -254,7 +254,7 @@ fn install_dependencies(options: &SetupOptions) -> StageOutput {
     return Some(thread::spawn(move || {
         // Install dependencies until `check` succeed
         loop {
-            ArchProcess::exec_with_panic_on_error("rm -f /var/lib/xbps/.xbps_*");
+            ArchProcess::exec_with_panic_on_error("rm -f /var/lib/pacman/db.lck");
             ArchProcess::exec(&install).with_log(|it| {
                 mpsc_sender
                     .send(SetupMessage::Progress(it))
@@ -269,7 +269,7 @@ fn install_dependencies(options: &SetupOptions) -> StageOutput {
 
 fn setup_firefox_config(_: &SetupOptions) -> StageOutput {
     // Create the Firefox root directory if it doesn't exist
-    let firefox_root = format!("{}/usr/lib/firefox", VOID_FS_ROOT);
+    let firefox_root = format!("{}/usr/lib/firefox", ARCH_FS_ROOT);
     let _ = fs::create_dir_all(&firefox_root).pb_expect("Failed to create Firefox root directory");
 
     // Create the defaults/pref directory
@@ -297,7 +297,7 @@ defaultPref("security.sandbox.content.level", 0);
 }
 
 fn fix_xkb_symlink(options: &SetupOptions) -> StageOutput {
-    let fs_root = Path::new(VOID_FS_ROOT);
+    let fs_root = Path::new(ARCH_FS_ROOT);
     let xkb_path = fs_root.join("usr/share/X11/xkb");
     let mpsc_sender = options.mpsc_sender.clone();
 
@@ -349,7 +349,7 @@ pub fn setup(android_app: AndroidApp) -> PolarBearBackend {
     };
 
     let stages: Vec<SetupStage> = vec![
-        Box::new(setup_void_fs),                // Step 1. Setup Void FS (extract)
+        Box::new(setup_arch_fs),                // Step 1. Setup Arch FS (extract)
         Box::new(simulate_linux_sysdata_stage), // Step 2. Simulate Linux system data
         Box::new(install_dependencies),         // Step 3. Install dependencies
         Box::new(setup_firefox_config),         // Step 4. Setup Firefox config

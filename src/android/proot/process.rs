@@ -33,12 +33,11 @@ impl ArchProcess {
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
+            .env("PROOT_UNBUNDLE_LOADER", "1")
             .arg("-r")
-            .arg(config::VOID_FS_ROOT)
-            .arg("-L")
-            .arg("--link2symlink")
+            .arg(config::ARCH_FS_ROOT)
             .arg("--bind=/dev/urandom:/dev/random")
-            .arg("/bin/bash")
+            .arg("/usr/bin/bash")
             .arg("-l");
 
         log::info!("Launching PRoot with envs: {:?}", process.get_envs().collect::<Vec<_>>());
@@ -166,7 +165,7 @@ mod tests {
         log::info!("Output: {}", String::from_utf8_lossy(&output.stdout));
         assert!(String::from_utf8_lossy(&output.stdout)
             .to_lowercase()
-            .contains("void"));
+            .contains("arch"));
     }
 
     #[test]
@@ -187,14 +186,14 @@ mod tests {
 
     #[test]
     fn should_exit_with_success_code() {
-        let process = ArchProcess::exec("xbps-query -Rs chrome");
+        let process = ArchProcess::exec("pacman -Ss chrome");
         let status = process.wait().expect("Failed to wait for process");
         assert_eq!(status.success(), true);
     }
 
     #[test]
     fn should_exit_with_fail_code() {
-        let process = ArchProcess::exec("xbps-query -s plasmma");
+        let process = ArchProcess::exec("pacman -Qg plasmma");
         let status = process.wait().expect("Failed to wait for process");
         assert_ne!(status.success(), true);
     }

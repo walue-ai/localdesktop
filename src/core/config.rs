@@ -9,11 +9,11 @@ use std::{
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(not(test))]
-pub const VOID_FS_ROOT: &str = "/data/data/app.polarbear/files/void";
+pub const ARCH_FS_ROOT: &str = "/data/data/app.polarbear/files/arch";
 #[cfg(test)]
-pub const VOID_FS_ROOT: &str = "/data/local/tmp/void";
+pub const ARCH_FS_ROOT: &str = "/data/local/tmp/arch";
 
-pub const VOID_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/void-aarch64-pd-v4.22.1.tar.xz";
+pub const ARCH_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/archlinux-aarch64-pd-v4.22.1.tar.xz";
 
 pub const WAYLAND_SOCKET_NAME: &str = "wayland-0";
 
@@ -64,11 +64,11 @@ pub struct CommandConfig {
 }
 
 fn default_check() -> String {
-    "xbps-query xorg-server-xwayland && xbps-query xfce4 && xbps-query onboard".to_string()
+    "pacman -Q xorg-xwayland && pacman -Qg xfce4 && pacman -Q onboard".to_string()
 }
 
 fn default_install() -> String {
-    "stdbuf -oL xbps-install -Syu xorg-server-xwayland xfce4 onboard".to_string()
+    "stdbuf -oL pacman -Syu xorg-xwayland xfce4 onboard --noconfirm --noprogressbar".to_string()
 }
 
 fn default_launch() -> String {
@@ -163,14 +163,14 @@ fn process_config_file(full_config_path: String) -> Vec<String> {
 
 pub fn save_config(config: &LocalConfig) {
     // If Arch FS does not exist or is empty, return early as we don't want to accidentally scaffold the /etc folder insi
-    if Path::new(VOID_FS_ROOT)
+    if Path::new(ARCH_FS_ROOT)
         .read_dir()
         .map_or(true, |mut d| d.next().is_none())
     {
         return;
     }
 
-    let config_path = format!("{}{}", VOID_FS_ROOT, CONFIG_FILE);
+    let config_path = format!("{}{}", ARCH_FS_ROOT, CONFIG_FILE);
     let config_path = Path::new(&config_path);
     let config_dir = config_path
         .parent()
