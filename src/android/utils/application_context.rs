@@ -1,5 +1,5 @@
 use crate::core::{
-    config::{parse_config, LocalConfig, ARCH_FS_ROOT, CONFIG_FILE},
+    config::{parse_config, LocalConfig, ARCH_FS_ROOT, VOID_FS_ROOT, CONFIG_FILE},
     logging::PolarBearExpectation,
 };
 use jni::{
@@ -32,8 +32,8 @@ impl ApplicationContext {
         let cache_dir = Self::get_path(&mut env, &activity, "getCacheDir");
         let data_dir = Self::get_path(&mut env, &activity, "getFilesDir");
         let native_library_dir = Self::get_native_library_dir(&mut env, &activity);
-        let full_config_path = format!("{}{}", ARCH_FS_ROOT, CONFIG_FILE);
-        let local_config = parse_config(full_config_path);
+        
+        let local_config = Self::load_config_with_distribution_detection();
 
         {
             let mut context = APPLICATION_CONTEXT
@@ -91,6 +91,28 @@ impl ApplicationContext {
             .pb_expect("Failed to convert native library dir to string")
             .into();
         PathBuf::from(path)
+    }
+
+    fn load_config_with_distribution_detection() -> LocalConfig {
+        let void_config_path = format!("{}{}", VOID_FS_ROOT, CONFIG_FILE);
+        if std::path::Path::new(VOID_FS_ROOT).exists() {
+            if let Ok(content) = std::fs::read_to_string(&void_config_path) {
+                if let Ok(config) = toml::from_str::<LocalConfig>(&content) {
+                    log::info!("Loaded config from Void Linux filesystem");
+                    return config;
+                }
+            }
+        }
+        
+        let arch_config_path = format!("{}{}", ARCH_FS_ROOT, CONFIG_FILE);
+        if std::path::Path::new(ARCH_FS_ROOT).exists() {
+            let config = parse_config(arch_config_path);
+            log::info!("Loaded config from Arch Linux filesystem");
+            return config;
+        }
+        
+        log::info!("No existing filesystem found, using default config");
+        LocalConfig::default()
     }
 }
 

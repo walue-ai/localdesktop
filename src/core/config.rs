@@ -65,7 +65,7 @@ impl Default for UserConfig {
 impl Default for DistributionConfig {
     fn default() -> Self {
         Self {
-            name: "arch".to_string(),
+            name: "void".to_string(),
         }
     }
 }
@@ -214,15 +214,20 @@ fn process_config_file(full_config_path: String) -> Vec<String> {
 }
 
 pub fn save_config(config: &LocalConfig) {
-    // If Arch FS does not exist or is empty, return early as we don't want to accidentally scaffold the /etc folder insi
-    if Path::new(ARCH_FS_ROOT)
+    let fs_root = match config.distribution.name.as_str() {
+        "void" => VOID_FS_ROOT,
+        _ => ARCH_FS_ROOT,
+    };
+    
+    // If the target FS does not exist or is empty, return early as we don't want to accidentally scaffold the /etc folder
+    if Path::new(fs_root)
         .read_dir()
         .map_or(true, |mut d| d.next().is_none())
     {
         return;
     }
 
-    let config_path = format!("{}{}", ARCH_FS_ROOT, CONFIG_FILE);
+    let config_path = format!("{}{}", fs_root, CONFIG_FILE);
     let config_path = Path::new(&config_path);
     let config_dir = config_path
         .parent()
