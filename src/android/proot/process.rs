@@ -33,8 +33,6 @@ impl ArchProcess {
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
-            .arg("-v")
-            .arg("5")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("-L")
