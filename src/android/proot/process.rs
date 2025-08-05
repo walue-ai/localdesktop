@@ -64,11 +64,7 @@ impl ArchProcess {
             .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root))
-            .arg("--bind=/system/bin/sh:/bin/sh");
-            
-        process
-            .arg("/bin/sh");
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root));
 
         let home = if self.user == "root" {
             "HOME=/root".to_string()
@@ -83,19 +79,20 @@ impl ArchProcess {
             .arg("TMPDIR=/tmp")
             .arg(format!("USER={}", self.user))
             .arg(format!("LOGNAME={}", self.user));
-        if self.user == "root" {
-            process.arg("sh");
+            
+        let command_parts: Vec<&str> = self.command.split_whitespace().collect();
+        if !command_parts.is_empty() {
+            let main_command = command_parts[0];
+            process.arg(main_command);
+            
+            for arg in &command_parts[1..] {
+                process.arg(arg);
+            }
         } else {
-            process
-                .arg("runuser")
-                .arg("-u")
-                .arg(&self.user)
-                .arg("--")
-                .arg("sh");
+            process.arg("echo").arg("No command specified");
         }
+        
         let child = process
-            .arg("-c")
-            .arg(&self.command)
             .stdout(Stdio::piped())
             .stderr(if self.panic_on_error {
                 Stdio::piped()
