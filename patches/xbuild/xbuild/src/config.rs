@@ -135,7 +135,7 @@ impl Config {
         }
         let target_sdk_version = 33;
         let target_sdk_codename = 13;
-        let min_sdk_version = 21;
+        let min_sdk_version = 23;
         manifest
             .compile_sdk_version
             .get_or_insert(target_sdk_version);
