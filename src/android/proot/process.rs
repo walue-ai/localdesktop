@@ -37,10 +37,7 @@ impl ArchProcess {
             .arg(config::VOID_FS_ROOT)
             .arg("-L")
             .arg("--link2symlink")
-            .arg("--bind=/dev/null:/proc/sys/kernel/cap_last_cap")
-            .arg("--bind=/dev/null:/proc/sys/fs/inotify/max_user_watches")
             .arg("--bind=/dev/urandom:/dev/random")
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::VOID_FS_ROOT))
             .arg("/bin/bash")
             .arg("-l");
 
