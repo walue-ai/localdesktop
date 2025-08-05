@@ -33,6 +33,8 @@ impl ArchProcess {
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
+            .env("PROOT_DONT_POLLUTE_ROOTFS", "0")
+            .env("PROOT_ANDROID_DATA_DIR", "/data/data/app.polarbear")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("--bind=/dev/urandom:/dev/random")

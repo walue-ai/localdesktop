@@ -218,8 +218,9 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
                 ];
 
             for (path, content) in proc_files {
-                let _ = fs::write(fs_root.join(path), content)
-                    .pb_expect(&format!("Permission denied while writing to {}", path));
+                if let Err(e) = fs::write(fs_root.join(path), content) {
+                    log::warn!("Failed to write proc file {}: {}. PRoot glue mechanism should handle this.", path, e);
+                }
             }
         }));
     }
