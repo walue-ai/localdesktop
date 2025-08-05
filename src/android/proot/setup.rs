@@ -211,6 +211,9 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
             let _ = fs::create_dir_all(fs_root.join("proc"));
             let _ = fs::create_dir_all(fs_root.join("sys"));
             let _ = fs::create_dir_all(fs_root.join("sys/.empty"));
+            let _ = fs::create_dir_all(fs_root.join("tmp"));
+            let _ = fs::create_dir_all(fs_root.join("usr/bin"));
+            let _ = fs::create_dir_all(fs_root.join("dev"));
 
             // Set permissions - only try to set permissions if we're on Unix and have the capability
             #[cfg(unix)]
@@ -223,6 +226,9 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
                     fs_root.join("sys/.empty"),
                     fs::Permissions::from_mode(0o700),
                 );
+                let _ = fs::set_permissions(fs_root.join("tmp"), fs::Permissions::from_mode(0o1777)); // Sticky bit for tmp
+                let _ = fs::set_permissions(fs_root.join("usr/bin"), fs::Permissions::from_mode(0o755));
+                let _ = fs::set_permissions(fs_root.join("dev"), fs::Permissions::from_mode(0o755));
             }
 
             // Create fake proc files
@@ -239,6 +245,29 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
             for (path, content) in proc_files {
                 let _ = fs::write(fs_root.join(path), content)
                     .pb_expect(&format!("Permission denied while writing to {}", path));
+            }
+
+            // Create /usr/bin/env if it doesn't exist - essential for many scripts
+            let env_path = fs_root.join("usr/bin/env");
+            if !env_path.exists() {
+                // Create a simple shell script that acts as env
+                let env_script = r#"#!/bin/sh
+# Simple env replacement for Android/PRoot environment
+if [ $# -eq 0 ]; then
+    # No arguments - print environment
+    printenv
+else
+    # Execute command with environment
+    exec "$@"
+fi
+"#;
+                let _ = fs::write(&env_path, env_script)
+                    .pb_expect("Failed to create /usr/bin/env");
+                
+                #[cfg(unix)]
+                {
+                    let _ = fs::set_permissions(&env_path, fs::Permissions::from_mode(0o755));
+                }
             }
         }));
     }
