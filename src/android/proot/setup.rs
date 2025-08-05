@@ -289,15 +289,6 @@ exec /system/bin/sh "$@"
                     let _ = fs::set_permissions(&sh_path, fs::Permissions::from_mode(0o755));
                 }
             }
-
-            // Create /root directory for root user home - essential for PRoot HOME environment
-            fs::create_dir_all(fs_root.join("root"))
-                .pb_expect("Failed to create /root directory");
-            
-            #[cfg(unix)]
-            {
-                let _ = fs::set_permissions(fs_root.join("root"), fs::Permissions::from_mode(0o700));
-            }
         }));
     }
     None

@@ -67,7 +67,7 @@ impl ArchProcess {
             .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root));
 
         let home = if self.user == "root" {
-            "HOME=/root".to_string()
+            "HOME=/tmp".to_string()
         } else {
             format!("HOME=/home/{}", self.user)
         };
