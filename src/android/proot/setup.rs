@@ -270,7 +270,9 @@ fi
                 }
             }
 
-            // Create /bin/sh if it doesn't exist - essential for PRoot shell execution
+            // Create /bin directory and /bin/sh if they don't exist - essential for PRoot shell execution
+            fs::create_dir_all(fs_root.join("bin"))
+                .pb_expect("Failed to create /bin directory");
             let sh_path = fs_root.join("bin/sh");
             if !sh_path.exists() {
                 // Create a simple shell script that acts as sh
@@ -279,7 +281,7 @@ fi
 # Forward all arguments to the system shell
 exec /system/bin/sh "$@"
 "#;
-                let _ = fs::write(&sh_path, sh_script)
+                fs::write(&sh_path, sh_script)
                     .pb_expect("Failed to create /bin/sh");
                 
                 #[cfg(unix)]
