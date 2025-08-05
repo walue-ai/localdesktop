@@ -142,6 +142,10 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 let tar = XzDecoder::new(tar_file);
                 let mut archive = Archive::new(tar);
 
+                archive.set_overwrite(true);
+                archive.set_preserve_permissions(false);
+                archive.set_preserve_ownerships(false);
+                
                 // Try to extract, if it fails, remove temp file and restart download
                 if let Err(e) = archive.unpack(context.data_dir.clone()) {
                     // Clean up the failed extraction
