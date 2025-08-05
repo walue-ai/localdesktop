@@ -33,7 +33,6 @@ impl ArchProcess {
             .env("PROOT_VERBOSE", "9")
             .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
             .env("PROOT_F2FS_WORKAROUND", "1")
-            .env("PROOT_UNBUNDLE_LOADER", "1")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
             .arg("--bind=/dev/urandom:/dev/random")
