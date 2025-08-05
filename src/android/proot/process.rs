@@ -77,6 +77,9 @@ impl ArchProcess {
             .arg("LANG=C.UTF-8")
             .arg("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
             .arg("TMPDIR=/tmp")
+            .arg("XDG_RUNTIME_DIR=/tmp")
+            .arg("WAYLAND_DISPLAY=wayland-0")
+            .arg("XDG_SESSION_TYPE=wayland")
             .arg(format!("USER={}", self.user))
             .arg(format!("LOGNAME={}", self.user));
             

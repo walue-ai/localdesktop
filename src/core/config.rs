@@ -124,8 +124,7 @@ fn default_void_install() -> String {
 }
 
 fn default_void_launch() -> String {
-    "XDG_RUNTIME_DIR=/tmp dbus-daemon --session --fork && export WAYLAND_DISPLAY=wayland-0 && export XDG_SESSION_TYPE=wayland"
-                .to_string()
+    "dbus-daemon --session --fork".to_string()
 }
 
 impl Default for CommandConfig {
