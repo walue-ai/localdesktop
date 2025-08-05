@@ -152,19 +152,11 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                         let header = entry.header();
                         
                         if header.entry_type() == tar::EntryType::Link {
-                            let path = entry.path()?;
-                            let full_path = context.data_dir.join(&path);
-                            
-                            // Create parent directories
-                            if let Some(parent) = full_path.parent() {
-                                std::fs::create_dir_all(parent)?;
-                            }
-                            
-                            // Extract as regular file (this copies the content)
-                            entry.unpack(&full_path)?;
-                        } else {
-                            entry.unpack_in(&context.data_dir)?;
+                            log::info!("Skipping hard link: {:?}", entry.path()?);
+                            continue;
                         }
+                        
+                        entry.unpack_in(&context.data_dir)?;
                     }
                     Ok(())
                 })();
