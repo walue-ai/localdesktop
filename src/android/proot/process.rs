@@ -45,11 +45,18 @@ impl ArchProcess {
             .arg("--bind=/proc")
             .arg("--bind=/sys")
             .arg(format!("--bind={}/tmp:/dev/shm", fs_root))
-            .arg("--bind=/dev/urandom:/dev/random")
-            .arg("--bind=/proc/self/fd:/dev/fd")
-            .arg("--bind=/proc/self/fd/0:/dev/stdin")
-            .arg("--bind=/proc/self/fd/1:/dev/stdout")
-            .arg("--bind=/proc/self/fd/2:/dev/stderr")
+            .arg("--bind=/dev/urandom:/dev/random");
+            
+        #[cfg(not(target_os = "android"))]
+        {
+            process
+                .arg("--bind=/proc/self/fd:/dev/fd")
+                .arg("--bind=/proc/self/fd/0:/dev/stdin")
+                .arg("--bind=/proc/self/fd/1:/dev/stdout")
+                .arg("--bind=/proc/self/fd/2:/dev/stderr");
+        }
+        
+        process
             .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", fs_root))
             .arg(format!("--bind={}/proc/.stat:/proc/stat", fs_root))
             .arg(format!("--bind={}/proc/.uptime:/proc/uptime", fs_root))
@@ -57,9 +64,11 @@ impl ArchProcess {
             .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root))
-            .arg("/usr/bin/env")
-            .arg("-i");
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root));
+            
+        process
+            .arg("/bin/bash")
+            .arg("-l");
 
         let home = if self.user == "root" {
             "HOME=/root".to_string()
