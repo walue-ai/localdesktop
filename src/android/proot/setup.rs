@@ -146,8 +146,31 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 archive.set_preserve_permissions(false);
                 archive.set_preserve_ownerships(false);
                 
+                let extract_result = (|| -> Result<(), Box<dyn std::error::Error>> {
+                    for entry in archive.entries()? {
+                        let mut entry = entry?;
+                        let header = entry.header();
+                        
+                        if header.entry_type() == tar::EntryType::Link {
+                            let path = entry.path()?;
+                            let full_path = context.data_dir.join(&path);
+                            
+                            // Create parent directories
+                            if let Some(parent) = full_path.parent() {
+                                std::fs::create_dir_all(parent)?;
+                            }
+                            
+                            // Extract as regular file (this copies the content)
+                            entry.unpack(&full_path)?;
+                        } else {
+                            entry.unpack_in(&context.data_dir)?;
+                        }
+                    }
+                    Ok(())
+                })();
+                
                 // Try to extract, if it fails, remove temp file and restart download
-                if let Err(e) = archive.unpack(context.data_dir.clone()) {
+                if let Err(e) = extract_result {
                     // Clean up the failed extraction
                     let _ = fs::remove_dir_all(&extracted_dir);
                     let _ = fs::remove_file(&temp_file);
