@@ -290,8 +290,16 @@ fn install_dependencies(options: &SetupOptions) -> StageOutput {
 }
 
 fn setup_firefox_config(_: &SetupOptions) -> StageOutput {
+    let context = get_application_context();
+    let distribution = context.local_config.distribution.name.clone();
+    
+    let fs_root = match distribution.as_str() {
+        "void" => VOID_FS_ROOT,
+        _ => ARCH_FS_ROOT,
+    };
+    
     // Create the Firefox root directory if it doesn't exist
-    let firefox_root = format!("{}/usr/lib/firefox", ARCH_FS_ROOT);
+    let firefox_root = format!("{}/usr/lib/firefox", fs_root);
     let _ = fs::create_dir_all(&firefox_root).pb_expect("Failed to create Firefox root directory");
 
     // Create the defaults/pref directory
@@ -319,7 +327,15 @@ defaultPref("security.sandbox.content.level", 0);
 }
 
 fn fix_xkb_symlink(options: &SetupOptions) -> StageOutput {
-    let fs_root = Path::new(ARCH_FS_ROOT);
+    let context = get_application_context();
+    let distribution = context.local_config.distribution.name.clone();
+    
+    let fs_root_str = match distribution.as_str() {
+        "void" => VOID_FS_ROOT,
+        _ => ARCH_FS_ROOT,
+    };
+    
+    let fs_root = Path::new(fs_root_str);
     let xkb_path = fs_root.join("usr/share/X11/xkb");
     let mpsc_sender = options.mpsc_sender.clone();
 
