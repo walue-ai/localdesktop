@@ -71,7 +71,6 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
     };
     
     let temp_file = context.data_dir.join(temp_filename);
-    let extracted_dir = context.data_dir.join(extracted_dirname);
     let mpsc_sender = options.mpsc_sender.clone();
 
     // Only run if the fs_root is missing or empty
@@ -133,8 +132,8 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                     ))
                     .pb_expect("Failed to send log message");
 
-                // Ensure the extracted directory is clean
-                let _ = fs::remove_dir_all(&extracted_dir);
+                // Ensure the final destination is clean
+                let _ = fs::remove_dir_all(fs_root);
 
                 // Extract tar file directly to the final destination
                 let tar_file = File::open(&temp_file)
@@ -156,7 +155,7 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                             continue;
                         }
                         
-                        entry.unpack_in(&context.data_dir)?;
+                        entry.unpack_in(fs_root.parent().unwrap())?;
                     }
                     Ok(())
                 })();
@@ -164,7 +163,7 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 // Try to extract, if it fails, remove temp file and restart download
                 if let Err(e) = extract_result {
                     // Clean up the failed extraction
-                    let _ = fs::remove_dir_all(&extracted_dir);
+                    let _ = fs::remove_dir_all(fs_root);
                     let _ = fs::remove_file(&temp_file);
 
                     mpsc_sender
@@ -181,10 +180,6 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 // If we get here, extraction was successful
                 break;
             }
-
-            // Move the extracted files to the final destination
-            fs::rename(&extracted_dir, fs_root)
-                .pb_expect("Failed to rename extracted files to final destination");
 
             // Clean up the temporary file
             fs::remove_file(&temp_file).pb_expect("Failed to remove temporary file");
