@@ -18,6 +18,12 @@ impl ArchProcess {
     pub fn spawn(mut self) -> Self {
         // Run the command inside Proot
         let context = get_application_context();
+        let distribution = context.local_config.distribution.name.clone();
+        
+        let fs_root = match distribution.as_str() {
+            "void" => config::VOID_FS_ROOT,
+            _ => config::ARCH_FS_ROOT,
+        };
 
         #[cfg(not(test))]
         let proot_loader = context.native_library_dir.join("libproot_loader.so");
@@ -27,9 +33,9 @@ impl ArchProcess {
         let mut process = Command::new(context.native_library_dir.join("libproot.so"));
         process
             .env("PROOT_LOADER", proot_loader)
-            .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
+            .env("PROOT_TMP_DIR", fs_root)
             .arg("-r")
-            .arg(config::ARCH_FS_ROOT)
+            .arg(fs_root)
             .arg("-L")
             .arg("--link2symlink")
             .arg("--sysvipc")
@@ -38,20 +44,20 @@ impl ArchProcess {
             .arg("--bind=/dev")
             .arg("--bind=/proc")
             .arg("--bind=/sys")
-            .arg(format!("--bind={}/tmp:/dev/shm", config::ARCH_FS_ROOT))
+            .arg(format!("--bind={}/tmp:/dev/shm", fs_root))
             .arg("--bind=/dev/urandom:/dev/random")
             .arg("--bind=/proc/self/fd:/dev/fd")
             .arg("--bind=/proc/self/fd/0:/dev/stdin")
             .arg("--bind=/proc/self/fd/1:/dev/stdout")
             .arg("--bind=/proc/self/fd/2:/dev/stderr")
-            .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.stat:/proc/stat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.uptime:/proc/uptime", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.version:/proc/version", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
+            .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", fs_root))
+            .arg(format!("--bind={}/proc/.stat:/proc/stat", fs_root))
+            .arg(format!("--bind={}/proc/.uptime:/proc/uptime", fs_root))
+            .arg(format!("--bind={}/proc/.version:/proc/version", fs_root))
+            .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", fs_root))
+            .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", fs_root))
+            .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root))
             .arg("/usr/bin/env")
             .arg("-i");
 
