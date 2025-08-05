@@ -9,7 +9,7 @@ use crate::{
         utils::application_context::get_application_context,
     },
     core::{
-        config::{CommandConfig, ARCH_FS_ARCHIVE, ARCH_FS_ROOT},
+        config::{ARCH_FS_ARCHIVE, ARCH_FS_ROOT, VOID_FS_ARCHIVE, VOID_FS_ROOT},
         logging::PolarBearExpectation,
     },
 };
@@ -51,11 +51,27 @@ type SetupStage = Box<dyn Fn(&SetupOptions) -> StageOutput + Send>;
 /// Otherwise, it should return a `JoinHandle`, so that the setup process can wait for the task to finish, but not block the main thread so that the setup progress can be reported to the user.
 type StageOutput = Option<JoinHandle<()>>;
 
-fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
+fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
     let context = get_application_context();
-    let temp_file = context.data_dir.join("archlinux-fs.tar.xz");
-    let fs_root = Path::new(ARCH_FS_ROOT);
-    let extracted_dir = context.data_dir.join("archlinux-aarch64");
+    let distribution = context.local_config.distribution.name.clone();
+    
+    let (fs_root, archive_url, temp_filename, extracted_dirname) = match distribution.as_str() {
+        "void" => (
+            Path::new(VOID_FS_ROOT),
+            VOID_FS_ARCHIVE,
+            "voidlinux-fs.tar.xz",
+            "void-aarch64"
+        ),
+        _ => (
+            Path::new(ARCH_FS_ROOT),
+            ARCH_FS_ARCHIVE,
+            "archlinux-fs.tar.xz",
+            "archlinux-aarch64"
+        ),
+    };
+    
+    let temp_file = context.data_dir.join(temp_filename);
+    let extracted_dir = context.data_dir.join(extracted_dirname);
     let mpsc_sender = options.mpsc_sender.clone();
 
     // Only run if the fs_root is missing or empty
@@ -68,16 +84,16 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
                 if !temp_file.exists() {
                     mpsc_sender
                         .send(SetupMessage::Progress(
-                            "Downloading Arch Linux FS...".to_string(),
+                            format!("Downloading {} Linux FS...", distribution).to_string(),
                         ))
                         .pb_expect("Failed to send log message");
 
-                    let response = reqwest::blocking::get(ARCH_FS_ARCHIVE)
-                        .pb_expect("Failed to download Arch Linux FS");
+                    let response = reqwest::blocking::get(archive_url)
+                        .pb_expect(&format!("Failed to download {} Linux FS", distribution));
 
                     let total_size = response.content_length().unwrap_or(0);
                     let mut file = File::create(&temp_file)
-                        .pb_expect("Failed to create temp file for Arch Linux FS");
+                        .pb_expect(&format!("Failed to create temp file for {} Linux FS", distribution));
 
                     let mut downloaded = 0u64;
                     let mut buffer = [0u8; 8192];
@@ -101,8 +117,8 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
                                 let total_mb = total_size as f64 / 1024.0 / 1024.0;
                                 mpsc_sender
                                     .send(SetupMessage::Progress(format!(
-                                        "Downloading Arch Linux FS... {}% ({:.2} MB / {:.2} MB)",
-                                        percent, downloaded_mb, total_mb
+                                        "Downloading {} Linux FS... {}% ({:.2} MB / {:.2} MB)",
+                                        distribution, percent, downloaded_mb, total_mb
                                     )))
                                     .unwrap_or(());
                                 last_percent = percent;
@@ -113,7 +129,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 
                 mpsc_sender
                     .send(SetupMessage::Progress(
-                        "Extracting Arch Linux FS...".to_string(),
+                        format!("Extracting {} Linux FS...", distribution).to_string(),
                     ))
                     .pb_expect("Failed to send log message");
 
@@ -122,7 +138,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 
                 // Extract tar file directly to the final destination
                 let tar_file = File::open(&temp_file)
-                    .pb_expect("Failed to open downloaded Arch Linux FS file");
+                    .pb_expect(&format!("Failed to open downloaded {} Linux FS file", distribution));
                 let tar = XzDecoder::new(tar_file);
                 let mut archive = Archive::new(tar);
 
@@ -134,8 +150,8 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 
                     mpsc_sender
                         .send(SetupMessage::Error(format!(
-                            "Failed to extract Arch Linux FS: {}. Restarting download...",
-                            e
+                            "Failed to extract {} Linux FS: {}. Restarting download...",
+                            distribution, e
                         )))
                         .unwrap_or(());
 
@@ -159,7 +175,14 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 }
 
 fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
-    let fs_root = Path::new(ARCH_FS_ROOT);
+    let context = get_application_context();
+    let distribution = context.local_config.distribution.name.clone();
+    
+    let fs_root = match distribution.as_str() {
+        "void" => Path::new(VOID_FS_ROOT),
+        _ => Path::new(ARCH_FS_ROOT),
+    };
+    
     let mpsc_sender = options.mpsc_sender.clone();
 
     if !fs_root.join("proc/.version").exists() {
@@ -215,11 +238,8 @@ fn install_dependencies(options: &SetupOptions) -> StageOutput {
     } = options;
 
     let context = get_application_context();
-    let CommandConfig {
-        check,
-        install,
-        launch: _,
-    } = context.local_config.command;
+    let distribution = context.local_config.distribution.name.clone();
+    let (check, install, _launch) = context.local_config.command.get_effective_commands(&distribution);
 
     let installed = move || {
         ArchProcess::exec(&check)
@@ -233,10 +253,16 @@ fn install_dependencies(options: &SetupOptions) -> StageOutput {
     }
 
     let mpsc_sender = mpsc_sender.clone();
+    let distribution_clone = distribution.clone();
     return Some(thread::spawn(move || {
         // Install dependencies until `check` succeed
         loop {
-            ArchProcess::exec_with_panic_on_error("rm -f /var/lib/pacman/db.lck");
+            // Remove lock file (works for both pacman and xbps)
+            match distribution_clone.as_str() {
+                "void" => ArchProcess::exec_with_panic_on_error("rm -f /var/db/xbps/.xbps_*"),
+                _ => ArchProcess::exec_with_panic_on_error("rm -f /var/lib/pacman/db.lck"),
+            }
+            
             ArchProcess::exec(&install).with_log(|it| {
                 mpsc_sender
                     .send(SetupMessage::Progress(it))
@@ -331,7 +357,7 @@ pub fn setup(android_app: AndroidApp) -> PolarBearBackend {
     };
 
     let stages: Vec<SetupStage> = vec![
-        Box::new(setup_arch_fs),                // Step 1. Setup Arch FS (extract)
+        Box::new(setup_linux_fs),               // Step 1. Setup Linux FS (extract) - now supports both Arch and Void
         Box::new(simulate_linux_sysdata_stage), // Step 2. Simulate Linux system data
         Box::new(install_dependencies),         // Step 3. Install dependencies
         Box::new(setup_firefox_config),         // Step 4. Setup Firefox config
