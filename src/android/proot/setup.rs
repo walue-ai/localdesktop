@@ -270,6 +270,72 @@ fi
                 }
             }
 
+            // Create essential system utilities that are missing in Void Linux rootfs
+            let system_utilities = [
+                ("rm", r#"#!/bin/sh
+# Simple rm replacement for Android/PRoot environment
+# Handle basic rm operations using Android toolbox
+if [ "$1" = "-f" ]; then
+    shift
+    for file in "$@"; do
+        if [ -e "$file" ] || [ -L "$file" ]; then
+            /system/bin/rm "$file" 2>/dev/null || true
+        fi
+    done
+elif [ "$1" = "-rf" ] || [ "$1" = "-fr" ]; then
+    shift
+    for file in "$@"; do
+        if [ -e "$file" ] || [ -L "$file" ]; then
+            /system/bin/rm -r "$file" 2>/dev/null || true
+        fi
+    done
+else
+    /system/bin/rm "$@"
+fi
+"#),
+                ("cp", r#"#!/bin/sh
+# Simple cp replacement for Android/PRoot environment
+exec /system/bin/cp "$@"
+"#),
+                ("mv", r#"#!/bin/sh
+# Simple mv replacement for Android/PRoot environment
+exec /system/bin/mv "$@"
+"#),
+                ("mkdir", r#"#!/bin/sh
+# Simple mkdir replacement for Android/PRoot environment
+exec /system/bin/mkdir "$@"
+"#),
+                ("ls", r#"#!/bin/sh
+# Simple ls replacement for Android/PRoot environment
+exec /system/bin/ls "$@"
+"#),
+                ("cat", r#"#!/bin/sh
+# Simple cat replacement for Android/PRoot environment
+exec /system/bin/cat "$@"
+"#),
+                ("chmod", r#"#!/bin/sh
+# Simple chmod replacement for Android/PRoot environment
+exec /system/bin/chmod "$@"
+"#),
+                ("chown", r#"#!/bin/sh
+# Simple chown replacement for Android/PRoot environment
+exec /system/bin/chown "$@"
+"#),
+            ];
+
+            for (cmd_name, script_content) in system_utilities.iter() {
+                let cmd_path = fs_root.join(format!("usr/bin/{}", cmd_name));
+                if !cmd_path.exists() {
+                    let _ = fs::write(&cmd_path, script_content)
+                        .pb_expect(&format!("Failed to create /usr/bin/{}", cmd_name));
+                    
+                    #[cfg(unix)]
+                    {
+                        let _ = fs::set_permissions(&cmd_path, fs::Permissions::from_mode(0o755));
+                    }
+                }
+            }
+
             // Create /bin directory and /bin/sh if they don't exist - essential for PRoot shell execution
             fs::create_dir_all(fs_root.join("bin"))
                 .pb_expect("Failed to create /bin directory");
