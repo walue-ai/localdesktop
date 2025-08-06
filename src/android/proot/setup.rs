@@ -767,11 +767,104 @@ fn verify_package_manager_tools(fs_root: &Path, distribution: &str, mpsc_sender:
                 }
             }
             
+            log::info!("=== ADVANCED APK TOOL LOCATION DEBUGGING ===");
+            
+            log::info!("Attempting to execute 'which apk' within rootfs...");
+            
+            // Try to find apk using different methods
+            let potential_apk_locations = [
+                "bin/apk", "sbin/apk", "usr/bin/apk", "usr/sbin/apk", 
+                "usr/local/bin/apk", "usr/local/sbin/apk", "system/bin/apk"
+            ];
+            
+            for location in &potential_apk_locations {
+                let apk_path = fs_root.join(location);
+                if apk_path.exists() {
+                    log::info!("✅ FOUND APK at: /{}", location);
+                    if let Ok(metadata) = std::fs::metadata(&apk_path) {
+                        log::info!("   - File size: {} bytes", metadata.len());
+                        log::info!("   - Permissions: {:o}", metadata.permissions().mode());
+                        log::info!("   - Is executable: {}", metadata.permissions().mode() & 0o111 != 0);
+                        log::info!("   - Is file: {}", metadata.is_file());
+                        log::info!("   - Is symlink: {}", metadata.file_type().is_symlink());
+                        
+                        if metadata.file_type().is_symlink() {
+                            if let Ok(target) = std::fs::read_link(&apk_path) {
+                                log::info!("   - Symlink target: {:?}", target);
+                            }
+                        }
+                        
+                        // Try to read first few bytes to verify it's a valid binary
+                        if let Ok(mut file) = std::fs::File::open(&apk_path) {
+                            let mut buffer = [0u8; 16];
+                            if let Ok(bytes_read) = std::io::Read::read(&mut file, &mut buffer) {
+                                log::info!("   - First {} bytes: {:02x?}", bytes_read, &buffer[..bytes_read]);
+                                
+                                if bytes_read >= 4 && buffer[0] == 0x7f && buffer[1] == 0x45 && buffer[2] == 0x4c && buffer[3] == 0x46 {
+                                    log::info!("   - ✅ Valid ELF binary detected");
+                                } else {
+                                    log::warn!("   - ⚠️  Not a standard ELF binary");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            log::info!("=== PATH ENVIRONMENT ANALYSIS ===");
+            log::info!("Standard Alpine Linux PATH should be: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+            
+            let path_dirs = ["usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin"];
+            for dir in &path_dirs {
+                let dir_path = fs_root.join(dir);
+                log::info!("PATH directory /{} exists: {}", dir, dir_path.exists());
+                if dir_path.exists() {
+                    if let Ok(entries) = std::fs::read_dir(&dir_path) {
+                        let count = entries.count();
+                        log::info!("   - Contains {} files/directories", count);
+                    }
+                }
+            }
+            
+            // Try to simulate 'which apk' by checking each PATH directory
+            log::info!("=== SIMULATING 'which apk' COMMAND ===");
+            let mut found_apk_in_path = false;
+            for dir in &path_dirs {
+                let apk_in_dir = fs_root.join(dir).join("apk");
+                if apk_in_dir.exists() {
+                    log::info!("✅ 'which apk' would find: /{}/apk", dir);
+                    found_apk_in_path = true;
+                    break;
+                }
+            }
+            
+            if !found_apk_in_path {
+                log::error!("❌ 'which apk' would return: command not found");
+                log::error!("APK tool is not in any standard PATH directory");
+            }
+            
+            log::info!("=== ROOTFS INTEGRITY VERIFICATION ===");
+            let critical_dirs = ["etc", "lib", "usr", "var", "tmp"];
+            for dir in &critical_dirs {
+                let dir_path = fs_root.join(dir);
+                log::info!("Critical directory /{} exists: {}", dir, dir_path.exists());
+            }
+            
+            let alpine_files = ["etc/alpine-release", "etc/apk/repositories", "lib/apk"];
+            for file in &alpine_files {
+                let file_path = fs_root.join(file);
+                log::info!("Alpine-specific path /{} exists: {}", file, file_path.exists());
+            }
+            
             log::info!("=== APK VERIFICATION SUMMARY ===");
             log::info!("Total APK-related tools found: {}", total_apk_tools);
             if total_apk_tools == 0 {
                 log::error!("❌ CRITICAL: NO APK TOOLS FOUND ANYWHERE IN ROOTFS!");
                 log::error!("This confirms the Alpine Linux rootfs is incomplete or corrupted.");
+                log::error!("Possible causes:");
+                log::error!("  1. Termux Alpine rootfs extraction failed");
+                log::error!("  2. APK tools are in non-standard locations");
+                log::error!("  3. Rootfs is missing essential Alpine Linux components");
             } else {
                 log::info!("✅ APK tools detected in rootfs");
             }
