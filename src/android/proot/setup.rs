@@ -9,7 +9,7 @@ use crate::{
         utils::application_context::get_application_context,
     },
     core::{
-        config::{ARCH_FS_ARCHIVE, ARCH_FS_ROOT, VOID_FS_ARCHIVE, VOID_FS_ROOT},
+        config::{ARCH_FS_ARCHIVE, ARCH_FS_ROOT, VOID_FS_ARCHIVE, VOID_FS_ROOT, ALPINE_FS_ARCHIVE, ALPINE_FS_ROOT},
         logging::PolarBearExpectation,
     },
 };
@@ -61,6 +61,12 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
             VOID_FS_ARCHIVE,
             "voidlinux-fs.tar.xz",
             "void-aarch64"
+        ),
+        "alpine" => (
+            Path::new(ALPINE_FS_ROOT),
+            ALPINE_FS_ARCHIVE,
+            "alpine-fs.tar.gz",
+            "."
         ),
         _ => (
             Path::new(ARCH_FS_ROOT),
@@ -198,6 +204,7 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
     
     let fs_root = match distribution.as_str() {
         "void" => Path::new(VOID_FS_ROOT),
+        "alpine" => Path::new(ALPINE_FS_ROOT),
         _ => Path::new(ARCH_FS_ROOT),
     };
     
@@ -349,6 +356,7 @@ fn setup_firefox_config(_: &SetupOptions) -> StageOutput {
     
     let fs_root = match distribution.as_str() {
         "void" => VOID_FS_ROOT,
+        "alpine" => ALPINE_FS_ROOT,
         _ => ARCH_FS_ROOT,
     };
     
@@ -386,6 +394,7 @@ fn fix_xkb_symlink(options: &SetupOptions) -> StageOutput {
     
     let fs_root_str = match distribution.as_str() {
         "void" => VOID_FS_ROOT,
+        "alpine" => ALPINE_FS_ROOT,
         _ => ARCH_FS_ROOT,
     };
     
@@ -588,6 +597,54 @@ fn verify_package_manager_tools(fs_root: &Path, distribution: &str, mpsc_sender:
                         let name = entry.file_name().to_string_lossy().to_string();
                         if name.starts_with("xbps") {
                             log::info!("Found XBPS tool in {}: {}", path, name);
+                        }
+                    }
+                }
+            }
+        },
+        "alpine" => {
+            let apk_path = fs_root.join("sbin/apk");
+            
+            log::info!("=== ALPINE LINUX PACKAGE MANAGER VERIFICATION ===");
+            log::info!("apk exists: {}", apk_path.exists());
+            
+            if apk_path.exists() {
+                if let Ok(metadata) = std::fs::metadata(&apk_path) {
+                    log::info!("apk permissions: {:?}", metadata.permissions());
+                    log::info!("apk size: {} bytes", metadata.len());
+                } else {
+                    log::warn!("Failed to get apk metadata");
+                }
+            }
+            
+            log::info!("=== SCANNING /sbin/ FOR APK TOOLS ===");
+            if let Ok(entries) = std::fs::read_dir(fs_root.join("sbin")) {
+                let mut apk_tools = Vec::new();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with("apk") {
+                        apk_tools.push(name.clone());
+                        log::info!("Found APK tool: {}", name);
+                    }
+                }
+                log::info!("Total APK tools found: {}", apk_tools.len());
+                if apk_tools.is_empty() {
+                    log::error!("❌ NO APK TOOLS FOUND IN /sbin/ - Alpine Linux rootfs incomplete!");
+                } else {
+                    log::info!("✅ APK tools found: {:?}", apk_tools);
+                }
+            } else {
+                log::error!("Failed to read /sbin/ directory");
+            }
+            
+            let other_paths = ["bin", "usr/bin", "usr/sbin"];
+            for path in &other_paths {
+                let search_path = fs_root.join(path);
+                if let Ok(entries) = std::fs::read_dir(&search_path) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.starts_with("apk") {
+                            log::info!("Found APK tool in {}: {}", path, name);
                         }
                     }
                 }

@@ -1,5 +1,5 @@
 use crate::core::{
-    config::{parse_config, LocalConfig, ARCH_FS_ROOT, VOID_FS_ROOT, CONFIG_FILE},
+    config::{parse_config, LocalConfig, ARCH_FS_ROOT, VOID_FS_ROOT, ALPINE_FS_ROOT, CONFIG_FILE},
     logging::PolarBearExpectation,
 };
 use jni::{
@@ -94,6 +94,16 @@ impl ApplicationContext {
     }
 
     fn load_config_with_distribution_detection() -> LocalConfig {
+        let alpine_config_path = format!("{}{}", ALPINE_FS_ROOT, CONFIG_FILE);
+        if std::path::Path::new(ALPINE_FS_ROOT).exists() {
+            if let Ok(content) = std::fs::read_to_string(&alpine_config_path) {
+                if let Ok(config) = toml::from_str::<LocalConfig>(&content) {
+                    log::info!("Loaded config from Alpine Linux filesystem");
+                    return config;
+                }
+            }
+        }
+        
         let void_config_path = format!("{}{}", VOID_FS_ROOT, CONFIG_FILE);
         if std::path::Path::new(VOID_FS_ROOT).exists() {
             if let Ok(content) = std::fs::read_to_string(&void_config_path) {

@@ -21,6 +21,13 @@ pub const VOID_FS_ROOT: &str = "/data/local/tmp/void";
 
 pub const VOID_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/void-aarch64-pd-v4.22.1.tar.xz";
 
+#[cfg(not(test))]
+pub const ALPINE_FS_ROOT: &str = "/data/data/app.polarbear/files/alpine";
+#[cfg(test)]
+pub const ALPINE_FS_ROOT: &str = "/data/local/tmp/alpine";
+
+pub const ALPINE_FS_ARCHIVE: &str = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.1-aarch64.tar.gz";
+
 pub const WAYLAND_SOCKET_NAME: &str = "wayland-0";
 
 pub const MAX_PANEL_LOG_ENTRIES: usize = 100;
@@ -65,7 +72,7 @@ impl Default for UserConfig {
 impl Default for DistributionConfig {
     fn default() -> Self {
         Self {
-            name: "void".to_string(),
+            name: "alpine".to_string(),
         }
     }
 }
@@ -77,6 +84,11 @@ impl CommandConfig {
                 if self.check.is_empty() { default_void_check() } else { self.check.clone() },
                 if self.install.is_empty() { default_void_install() } else { self.install.clone() },
                 if self.launch.is_empty() { default_void_launch() } else { self.launch.clone() },
+            ),
+            "alpine" => (
+                if self.check.is_empty() { default_alpine_check() } else { self.check.clone() },
+                if self.install.is_empty() { default_alpine_install() } else { self.install.clone() },
+                if self.launch.is_empty() { default_alpine_launch() } else { self.launch.clone() },
             ),
             _ => (
                 if self.check.is_empty() { default_check() } else { self.check.clone() },
@@ -125,6 +137,18 @@ fn default_void_install() -> String {
 
 fn default_void_launch() -> String {
     "dbus-daemon --session --fork".to_string()
+}
+
+fn default_alpine_check() -> String {
+    "apk info xorg-server && apk info xfce4 && apk info onboard".to_string()
+}
+
+fn default_alpine_install() -> String {
+    "apk update && apk add xorg-server xfce4 xfce4-terminal onboard dbus mesa-dri-gallium".to_string()
+}
+
+fn default_alpine_launch() -> String {
+    "XDG_RUNTIME_DIR=/tmp Xorg -noreset +extension GLX +extension RANDR +extension RENDER :1 2>&1 & while [ ! -e /tmp/.X11-unix/X1 ]; do sleep 0.1; done; XDG_SESSION_TYPE=x11 DISPLAY=:1 dbus-launch startxfce4 2>&1".to_string()
 }
 
 impl Default for CommandConfig {
@@ -215,6 +239,7 @@ fn process_config_file(full_config_path: String) -> Vec<String> {
 pub fn save_config(config: &LocalConfig) {
     let fs_root = match config.distribution.name.as_str() {
         "void" => VOID_FS_ROOT,
+        "alpine" => ALPINE_FS_ROOT,
         _ => ARCH_FS_ROOT,
     };
     
