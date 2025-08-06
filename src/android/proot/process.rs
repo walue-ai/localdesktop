@@ -66,22 +66,22 @@ impl ArchProcess {
             .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
             .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root));
 
-        let home = if self.user == "root" {
-            "HOME=/tmp".to_string()
+        let home_value = if self.user == "root" {
+            "/tmp".to_string()
         } else {
-            format!("HOME=/home/{}", self.user)
+            format!("/home/{}", self.user)
         };
-        process.arg(home);
-
+        
         process
-            .arg("LANG=C.UTF-8")
-            .arg("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
-            .arg("TMPDIR=/tmp")
-            .arg("XDG_RUNTIME_DIR=/tmp")
-            .arg("WAYLAND_DISPLAY=wayland-0")
-            .arg("XDG_SESSION_TYPE=wayland")
-            .arg(format!("USER={}", self.user))
-            .arg(format!("LOGNAME={}", self.user));
+            .env("HOME", &home_value)
+            .env("LANG", "C.UTF-8")
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
+            .env("TMPDIR", "/tmp")
+            .env("XDG_RUNTIME_DIR", "/tmp")
+            .env("WAYLAND_DISPLAY", "wayland-0")
+            .env("XDG_SESSION_TYPE", "wayland")
+            .env("USER", &self.user)
+            .env("LOGNAME", &self.user);
             
         let command_parts: Vec<&str> = self.command.split_whitespace().collect();
         if !command_parts.is_empty() {
