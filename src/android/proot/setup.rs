@@ -79,9 +79,29 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
     let temp_file = context.data_dir.join(temp_filename);
     let mpsc_sender = options.mpsc_sender.clone();
 
-    // Only run if the fs_root is missing or empty
+    // Only run if the fs_root is missing, empty, or incomplete (missing essential tools)
     // TODO: Setup integration test to make sure on clean install, the fs_root is either non existent or empty
-    let need_setup = fs_root.read_dir().map_or(true, |mut d| d.next().is_none());
+    let is_empty = fs_root.read_dir().map_or(true, |mut d| d.next().is_none());
+    
+    let is_complete = if !is_empty {
+        match distribution.as_str() {
+            "alpine" => fs_root.join("sbin/apk").exists(),
+            "void" => fs_root.join("usr/bin/xbps-query").exists() && fs_root.join("usr/bin/xbps-install").exists(),
+            _ => fs_root.join("usr/bin/pacman").exists(),
+        }
+    } else {
+        false
+    };
+    
+    let need_setup = is_empty || !is_complete;
+    
+    log::info!("=== EXTRACTION DECISION LOGIC ===");
+    log::info!("Distribution: {}", distribution);
+    log::info!("Rootfs path: {:?}", fs_root);
+    log::info!("Directory is empty: {}", is_empty);
+    log::info!("Directory is complete: {}", is_complete);
+    log::info!("Need setup/extraction: {}", need_setup);
+    
     if need_setup {
         return Some(thread::spawn(move || {
             // Download if the archive doesn't exist
