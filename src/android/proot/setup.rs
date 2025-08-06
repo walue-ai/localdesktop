@@ -29,7 +29,6 @@ use std::{
 use tar::Archive;
 use winit::platform::android::activity::AndroidApp;
 use xz2::read::XzDecoder;
-use flate2::read::GzDecoder;
 
 #[derive(Debug)]
 pub enum SetupMessage {
@@ -139,12 +138,21 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                     ))
                     .pb_expect("Failed to send log message");
 
+                log::info!("=== STARTING {} LINUX ROOTFS EXTRACTION ===", distribution.to_uppercase());
+                log::info!("Source file: {:?}", temp_file);
+                log::info!("Target directory: {:?}", fs_root);
+                log::info!("Expected extracted dirname: {}", extracted_dirname);
+
                 // Ensure the final destination is clean
                 let _ = fs::remove_dir_all(fs_root);
+                log::info!("Cleaned target directory: {:?}", fs_root);
 
                 // Extract tar file directly to the final destination
                 let tar_file = File::open(&temp_file)
                     .pb_expect(&format!("Failed to open downloaded {} Linux FS file", distribution));
+                
+                log::info!("Opened tar file successfully, file size: {} bytes", 
+                    tar_file.metadata().map(|m| m.len()).unwrap_or(0));
                 
                 let mut archive: Archive<Box<dyn Read>> = {
                     let xz = XzDecoder::new(tar_file);
@@ -155,23 +163,51 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 archive.set_preserve_permissions(false);
                 archive.set_preserve_ownerships(false);
                 
+                log::info!("Archive configured, starting extraction...");
+                let mut extracted_files = 0;
+                let mut extracted_dirs = 0;
+                let mut skipped_links = 0;
+                
                 let extract_result = (|| -> Result<(), Box<dyn std::error::Error>> {
                     for entry in archive.entries()? {
                         let mut entry = entry?;
-                        let header = entry.header();
+                        let path = entry.path()?.to_path_buf();
+                        let header = entry.header().clone();
                         
                         if header.entry_type() == tar::EntryType::Link {
-                            log::info!("Skipping hard link: {:?}", entry.path()?);
+                            log::debug!("Skipping hard link: {:?}", path);
+                            skipped_links += 1;
                             continue;
                         }
                         
+                        let path_str = path.to_string_lossy();
+                        if path_str.contains("apk") || path_str.contains("bin/") || path_str.contains("sbin/") {
+                            log::info!("Extracting important file: {:?} (type: {:?})", path, header.entry_type());
+                        }
+                        
                         entry.unpack_in(fs_root.parent().unwrap())?;
+                        
+                        match header.entry_type() {
+                            tar::EntryType::Directory => extracted_dirs += 1,
+                            tar::EntryType::Regular => extracted_files += 1,
+                            _ => {}
+                        }
+                        
+                        if (extracted_files + extracted_dirs) % 1000 == 0 {
+                            log::info!("Extraction progress: {} files, {} dirs extracted", extracted_files, extracted_dirs);
+                        }
                     }
                     Ok(())
                 })();
                 
+                log::info!("Extraction completed - Files: {}, Dirs: {}, Skipped links: {}", 
+                    extracted_files, extracted_dirs, skipped_links);
+                
                 // Try to extract, if it fails, remove temp file and restart download
                 if let Err(e) = extract_result {
+                    log::error!("❌ EXTRACTION FAILED: {}", e);
+                    log::error!("Cleaning up failed extraction and retrying download...");
+                    
                     // Clean up the failed extraction
                     let _ = fs::remove_dir_all(fs_root);
                     let _ = fs::remove_file(&temp_file);
@@ -188,9 +224,34 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 }
 
                 // If we get here, extraction was successful
+                log::info!("✅ EXTRACTION SUCCESSFUL!");
+                
+                log::info!("=== POST-EXTRACTION DIRECTORY VERIFICATION ===");
+                if fs_root.exists() {
+                    log::info!("✅ Target directory exists: {:?}", fs_root);
+                    
+                    if let Ok(entries) = std::fs::read_dir(fs_root) {
+                        let mut dirs = Vec::new();
+                        let mut files = Vec::new();
+                        for entry in entries.flatten() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                                dirs.push(name);
+                            } else {
+                                files.push(name);
+                            }
+                        }
+                        log::info!("Top-level directories: {:?}", dirs);
+                        log::info!("Top-level files: {:?}", files);
+                    }
+                } else {
+                    log::error!("❌ Target directory does not exist after extraction: {:?}", fs_root);
+                }
                 
                 // SOLUTION A & B: Verify package manager tools after successful extraction
+                log::info!("=== STARTING PACKAGE MANAGER VERIFICATION ===");
                 verify_package_manager_tools(fs_root, &distribution, &mpsc_sender);
+                log::info!("=== PACKAGE MANAGER VERIFICATION COMPLETE ===");
                 
                 break;
             }
@@ -546,6 +607,15 @@ fn verify_package_manager_tools(fs_root: &Path, distribution: &str, mpsc_sender:
         ))
         .unwrap_or(());
 
+    log::info!("=== {} PACKAGE MANAGER VERIFICATION STARTED ===", distribution.to_uppercase());
+    log::info!("Rootfs path: {:?}", fs_root);
+    log::info!("Rootfs exists: {}", fs_root.exists());
+    
+    if !fs_root.exists() {
+        log::error!("❌ CRITICAL: Rootfs directory does not exist!");
+        return;
+    }
+
     match distribution {
         "void" => {
             let xbps_query_path = fs_root.join("usr/bin/xbps-query");
@@ -610,48 +680,80 @@ fn verify_package_manager_tools(fs_root: &Path, distribution: &str, mpsc_sender:
             let apk_path = fs_root.join("sbin/apk");
             
             log::info!("=== ALPINE LINUX PACKAGE MANAGER VERIFICATION ===");
+            log::info!("Primary APK path: {:?}", apk_path);
             log::info!("apk exists: {}", apk_path.exists());
+            
+            let sbin_dir = fs_root.join("sbin");
+            log::info!("/sbin directory exists: {}", sbin_dir.exists());
             
             if apk_path.exists() {
                 if let Ok(metadata) = std::fs::metadata(&apk_path) {
-                    log::info!("apk permissions: {:?}", metadata.permissions());
-                    log::info!("apk size: {} bytes", metadata.len());
-                } else {
-                    log::warn!("Failed to get apk metadata");
-                }
-            }
-            
-            log::info!("=== SCANNING /sbin/ FOR APK TOOLS ===");
-            if let Ok(entries) = std::fs::read_dir(fs_root.join("sbin")) {
-                let mut apk_tools = Vec::new();
-                for entry in entries.flatten() {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    if name.starts_with("apk") {
-                        apk_tools.push(name.clone());
-                        log::info!("Found APK tool: {}", name);
+                    log::info!("✅ apk permissions: {:?}", metadata.permissions());
+                    log::info!("✅ apk size: {} bytes", metadata.len());
+                    log::info!("✅ apk is_file: {}", metadata.is_file());
+                    
+                    // Try to read the file to verify it's accessible
+                    match std::fs::File::open(&apk_path) {
+                        Ok(_) => log::info!("✅ apk file is readable"),
+                        Err(e) => log::error!("❌ apk file is not readable: {}", e),
                     }
-                }
-                log::info!("Total APK tools found: {}", apk_tools.len());
-                if apk_tools.is_empty() {
-                    log::error!("❌ NO APK TOOLS FOUND IN /sbin/ - Alpine Linux rootfs incomplete!");
                 } else {
-                    log::info!("✅ APK tools found: {:?}", apk_tools);
+                    log::warn!("❌ Failed to get apk metadata");
                 }
             } else {
-                log::error!("Failed to read /sbin/ directory");
+                log::error!("❌ APK TOOL NOT FOUND AT EXPECTED LOCATION: {:?}", apk_path);
             }
             
-            let other_paths = ["bin", "usr/bin", "usr/sbin"];
-            for path in &other_paths {
+            log::info!("=== COMPREHENSIVE DIRECTORY SCAN FOR APK TOOLS ===");
+            let search_paths = ["sbin", "bin", "usr/bin", "usr/sbin", "usr/local/bin", "usr/local/sbin"];
+            let mut total_apk_tools = 0;
+            
+            for path in &search_paths {
                 let search_path = fs_root.join(path);
+                log::info!("Scanning directory: {:?} (exists: {})", search_path, search_path.exists());
+                
                 if let Ok(entries) = std::fs::read_dir(&search_path) {
+                    let mut path_apk_tools = Vec::new();
+                    let mut all_files = Vec::new();
+                    
                     for entry in entries.flatten() {
                         let name = entry.file_name().to_string_lossy().to_string();
-                        if name.starts_with("apk") {
-                            log::info!("Found APK tool in {}: {}", path, name);
+                        all_files.push(name.clone());
+                        
+                        if name.starts_with("apk") || name.contains("apk") {
+                            path_apk_tools.push(name.clone());
+                            total_apk_tools += 1;
+                            log::info!("✅ Found APK-related tool in {}: {}", path, name);
+                            
+                            let tool_path = search_path.join(&name);
+                            if let Ok(metadata) = std::fs::metadata(&tool_path) {
+                                log::info!("   - Size: {} bytes, Executable: {}", 
+                                    metadata.len(), 
+                                    metadata.permissions().mode() & 0o111 != 0);
+                            }
                         }
                     }
+                    
+                    if path_apk_tools.is_empty() {
+                        log::info!("No APK tools in {}, total files: {}", path, all_files.len());
+                        if *path == "sbin" && all_files.len() < 10 {
+                            log::info!("Files in /sbin: {:?}", all_files);
+                        }
+                    } else {
+                        log::info!("APK tools in {}: {:?}", path, path_apk_tools);
+                    }
+                } else {
+                    log::warn!("Cannot read directory: {:?}", search_path);
                 }
+            }
+            
+            log::info!("=== APK VERIFICATION SUMMARY ===");
+            log::info!("Total APK-related tools found: {}", total_apk_tools);
+            if total_apk_tools == 0 {
+                log::error!("❌ CRITICAL: NO APK TOOLS FOUND ANYWHERE IN ROOTFS!");
+                log::error!("This confirms the Alpine Linux rootfs is incomplete or corrupted.");
+            } else {
+                log::info!("✅ APK tools detected in rootfs");
             }
         },
         _ => {
