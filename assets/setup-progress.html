@@ -4,179 +4,253 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Welcome to Local Desktop</title>
-    <script src="https://cdn.jsdelivr.net/npm/vue@3"></script>
     <style>
       ::selection {
         background-color: rgba(144, 238, 144, 0.5);
+      }
+      .welcome-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+      }
+      .welcome-section {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-family: 'Arial', sans-serif;
+        transition: flex 0.3s ease;
+      }
+      .welcome-section.collapsed {
+        flex: 0.1;
+        min-height: 60px;
+      }
+      .welcome-text {
+        font-size: 3rem;
+        font-weight: bold;
+        text-align: center;
+        transition: font-size 0.3s ease;
+      }
+      .welcome-section.collapsed .welcome-text {
+        font-size: 1rem;
+      }
+      .progress-section {
+        position: relative;
+        flex: 0 0 auto;
+        padding: 10px;
+        background-color: black;
+        font-family: monospace;
+        display: flex;
+        justify-content: space-between;
+        color: white;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        transition: flex 0.3s ease;
+        min-height: 50px;
+      }
+      .progress-section.expanded {
+        flex: 1;
+      }
+      .log-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow-y: auto;
+        background-color: rgba(30, 30, 30);
+        color: white;
+        font-family: monospace;
+        padding: 10px;
+        z-index: 1;
+        display: none;
+      }
+      .log-overlay.visible {
+        display: flex;
+        flex-direction: column-reverse;
+      }
+      .log-entry {
+        display: flex;
+        margin-bottom: 5px;
+      }
+      .log-timestamp {
+        color: gray;
+        font-weight: bold;
+        margin-right: 10px;
+        flex-shrink: 0;
+      }
+      .log-message {
+        flex: 1;
+        white-space: pre-wrap;
+      }
+      .progress-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 0;
+        background-color: #006400;
+        transition: width 0.3s ease;
+      }
+      .progress-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        position: relative;
+        z-index: 1;
+        padding-right: 12px;
+      }
+      .progress-percentage {
+        flex: none;
+        position: relative;
+        z-index: 1;
       }
     </style>
   </head>
 
   <body style="margin: 0">
-    <div
-      style="display: flex; flex-direction: column; height: 100vh; width: 100vw"
-    >
-      <div style="flex: 1; position: relative">
-        <iframe
-          src="https://localdesktop.github.io/docs/user/getting-started"
-          style="border: none; width: 100%; height: 100%"
-        ></iframe>
-        <div
-          v-show="showFullLog"
-          style="
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            overflow-y: auto;
-            background-color: rgba(30, 30, 30);
-            color: white;
-            font-family: monospace;
-            padding: 10px;
-            z-index: 1;
-            display: flex;
-            flex-direction: column-reverse; /* Reverse the order of logs */
-          "
-        >
-          <div
-            v-for="log in logs"
-            :key="log.id"
-            :style="{
-              display: 'flex',
-              marginBottom: '5px',
-              color: log.isError ? '#ff0000' : 'white'
-            }"
-          >
-            <div
-              style="
-                color: gray;
-                font-weight: bold;
-                margin-right: 10px;
-                flex-shrink: 0;
-              "
-            >
-              {{ new Date(log.timestamp).toLocaleTimeString() }}
-            </div>
-            <div style="flex: 1; white-space: pre-wrap">{{ log.message }}</div>
-          </div>
-        </div>
+    <div class="welcome-container">
+      <!-- Welcome Section -->
+      <div class="welcome-section" id="welcomeSection">
+        <div class="welcome-text">Welcome</div>
       </div>
-      <div
-        @click="toggleView"
-        style="
-          position: relative;
-          flex: none;
-          padding: 10px;
-          background-color: black;
-          font-family: monospace;
-          display: flex;
-          justify-content: space-between;
-          color: white;
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
-          user-select: none;
-        "
-      >
-        <div
-          :style="{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            height: '100%',
-            width: progress + '%',
-            backgroundColor: progressBarColor,
-            zIndex: 0
-          }"
-        ></div>
-        <span
-          style="
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            position: relative;
-            z-index: 1;
-            padding-right: 12px;
-          "
-        >
-          {{ message }}
+
+      <!-- Progress Section -->
+      <div class="progress-section" id="progressSection">
+        <div class="progress-bar" id="progressBar"></div>
+        <span class="progress-text" id="progressText">Installing...</span>
+        <span class="progress-percentage">
+          <span id="progressPercentage">0</span>%
         </span>
-        <span style="flex: none; position: relative; z-index: 1"
-          ><span>{{ progress }}</span>%
-        </span>
+
+        <!-- Log Overlay -->
+        <div class="log-overlay" id="logOverlay">
+          <div id="logContainer"></div>
+        </div>
       </div>
     </div>
 
     <script>
-      const app = Vue.createApp({
-        data() {
-          return {
-            showFullLog: false,
-            progress: 0,
-            logs: [],
-            logCounter: 0,
-            hasError: false,
-          };
-        },
-        computed: {
-          message() {
-            return this.logs[0]?.message || "Installing...";
-          },
-          progressBarColor() {
-            return this.hasError ? "#ff0000" : "#006400";
-          },
-        },
-        methods: {
-          toggleView() {
-            this.showFullLog = !this.showFullLog;
-          },
-          handleWebSocketMessage(data) {
-            this.progress = data.progress;
+      // State
+      let progress = 0;
+      let logs = [];
+      let logCounter = 0;
+      let hasError = false;
+      let showFullLog = false;
 
-            const isError = data.isError || false;
-            this.hasError = isError;
+      // DOM Elements
+      const welcomeSection = document.getElementById('welcomeSection');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const progressPercentage = document.getElementById('progressPercentage');
+      const logOverlay = document.getElementById('logOverlay');
+      const logContainer = document.getElementById('logContainer');
+      const progressSection = document.getElementById('progressSection');
 
-            if (this.progress === 100 && !this.hasError) {
-              alert("Installation finished, please restart the app!");
-            }
+      // Functions
+      function updateProgress(newProgress) {
+        progress = newProgress;
+        progressBar.style.width = progress + '%';
+        progressPercentage.textContent = progress;
 
-            this.logs.unshift({
-              id: this.logCounter++,
-              timestamp: Date.now(),
-              message: data.message,
-              isError: isError,
-            });
-            if (this.logs.length > 100) {
-              this.logs.pop();
-            }
-          },
-        },
-        mounted() {
-          const params = new URLSearchParams(window.location.search);
-          const port = params.get("port");
-          const ws = new WebSocket(`ws://127.0.0.1:${port}`, "rust-websocket");
+        if (hasError) {
+          progressBar.style.backgroundColor = '#ff0000';
+        } else {
+          progressBar.style.backgroundColor = '#006400';
+        }
+      }
 
-          ws.onopen = () => {
-            console.log("WebSocket connection established");
-          };
+      function addLog(message, isError = false) {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.style.color = isError ? '#ff0000' : 'white';
 
-          ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleWebSocketMessage(data);
-          };
+        const timestamp = document.createElement('div');
+        timestamp.className = 'log-timestamp';
+        timestamp.textContent = new Date().toLocaleTimeString();
 
-          ws.onclose = () => {
-            console.log("WebSocket connection closed");
-          };
+        const logMessage = document.createElement('div');
+        logMessage.className = 'log-message';
+        logMessage.textContent = message;
 
-          ws.onerror = (error) => {
-            console.error("WebSocket error:", error);
-          };
-        },
-      });
+        logEntry.appendChild(timestamp);
+        logEntry.appendChild(logMessage);
 
-      app.mount("body > div");
+        // Add to beginning of container
+        logContainer.insertBefore(logEntry, logContainer.firstChild);
+
+        // Keep only last 100 logs
+        while (logContainer.children.length > 100) {
+          logContainer.removeChild(logContainer.lastChild);
+        }
+
+        // Update progress text with latest message
+        progressText.textContent = message;
+      }
+
+      function toggleLogView() {
+        showFullLog = !showFullLog;
+
+        if (showFullLog) {
+          // Expand progress section and collapse welcome
+          welcomeSection.classList.add('collapsed');
+          progressSection.classList.add('expanded');
+          logOverlay.classList.add('visible');
+        } else {
+          // Collapse progress section and expand welcome
+          welcomeSection.classList.remove('collapsed');
+          progressSection.classList.remove('expanded');
+          logOverlay.classList.remove('visible');
+        }
+      }
+
+      function handleWebSocketMessage(data) {
+        updateProgress(data.progress);
+
+        const isError = data.isError || false;
+        hasError = isError;
+
+        if (progress === 100 && !hasError) {
+          alert("Installation finished, please restart the app!");
+        }
+
+        addLog(data.message, isError);
+      }
+
+      // Event Listeners
+      progressSection.addEventListener('click', toggleLogView);
+
+      // WebSocket Connection
+      function connectWebSocket() {
+        const params = new URLSearchParams(window.location.search);
+        const port = params.get("port");
+        const ws = new WebSocket(`ws://127.0.0.1:${port}`, "rust-websocket");
+
+        ws.onopen = () => {
+          console.log("WebSocket connection established");
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          handleWebSocketMessage(data);
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket connection closed");
+        };
+
+        ws.onerror = (error) => {
+          console.error("WebSocket error:", error);
+        };
+      }
+
+      // Initialize
+      connectWebSocket();
     </script>
   </body>
 </html>
