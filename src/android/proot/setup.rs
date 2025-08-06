@@ -270,26 +270,6 @@ fi
                 }
             }
 
-            let system_utilities = [
-                "rm", "cp", "mv", "mkdir", "ls", "cat", "chmod", "chown", "ln", "touch", "grep", "sed", "awk"
-            ];
-
-            for cmd_name in system_utilities.iter() {
-                let cmd_path = fs_root.join(format!("usr/bin/{}", cmd_name));
-                let system_cmd_path = format!("/system/bin/{}", cmd_name);
-                
-                if !cmd_path.exists() {
-                    // Copy the binary directly from Android system directory
-                    if let Ok(content) = fs::read(&system_cmd_path) {
-                        if let Ok(_) = fs::write(&cmd_path, content) {
-                            #[cfg(unix)]
-                            {
-                                let _ = fs::set_permissions(&cmd_path, fs::Permissions::from_mode(0o755));
-                            }
-                        }
-                    }
-                }
-            }
 
             // Create /bin directory and /bin/sh if they don't exist - essential for PRoot shell execution
             fs::create_dir_all(fs_root.join("bin"))

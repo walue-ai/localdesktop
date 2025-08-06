@@ -64,7 +64,9 @@ impl ArchProcess {
             .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", fs_root))
             .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root));
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root))
+            .arg("--bind=/system/bin:/usr/bin")
+            .arg("--bind=/system/xbin:/usr/sbin");
 
         let home_value = if self.user == "root" {
             "/tmp".to_string()
