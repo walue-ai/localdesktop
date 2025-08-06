@@ -29,6 +29,7 @@ use std::{
 use tar::Archive;
 use winit::platform::android::activity::AndroidApp;
 use xz2::read::XzDecoder;
+use flate2::read::GzDecoder;
 
 #[derive(Debug)]
 pub enum SetupMessage {
@@ -144,8 +145,17 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 // Extract tar file directly to the final destination
                 let tar_file = File::open(&temp_file)
                     .pb_expect(&format!("Failed to open downloaded {} Linux FS file", distribution));
-                let tar = XzDecoder::new(tar_file);
-                let mut archive = Archive::new(tar);
+                
+                let mut archive: Archive<Box<dyn Read>> = match distribution.as_str() {
+                    "alpine" => {
+                        let gz = GzDecoder::new(tar_file);
+                        Archive::new(Box::new(gz))
+                    },
+                    _ => {
+                        let xz = XzDecoder::new(tar_file);
+                        Archive::new(Box::new(xz))
+                    }
+                };
 
                 archive.set_overwrite(true);
                 archive.set_preserve_permissions(false);
