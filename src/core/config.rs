@@ -72,7 +72,7 @@ impl Default for UserConfig {
 impl Default for DistributionConfig {
     fn default() -> Self {
         Self {
-            name: "alpine".to_string(),
+            name: "arch".to_string(),
         }
     }
 }
@@ -154,9 +154,9 @@ fn default_alpine_launch() -> String {
 impl Default for CommandConfig {
     fn default() -> Self {
         Self {
-            check: String::new(),
-            install: String::new(),
-            launch: String::new(),
+            check: default_check(),
+            install: default_install(),
+            launch: default_launch(),
         }
     }
 }
