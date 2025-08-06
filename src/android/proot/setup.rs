@@ -66,8 +66,8 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
         "alpine" => (
             Path::new(ALPINE_FS_ROOT),
             ALPINE_FS_ARCHIVE,
-            "alpine-fs.tar.gz",
-            "."
+            "alpine-fs.tar.xz",
+            "alpine-aarch64-pd-v4.25.0"
         ),
         _ => (
             Path::new(ARCH_FS_ROOT),
@@ -146,15 +146,9 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 let tar_file = File::open(&temp_file)
                     .pb_expect(&format!("Failed to open downloaded {} Linux FS file", distribution));
                 
-                let mut archive: Archive<Box<dyn Read>> = match distribution.as_str() {
-                    "alpine" => {
-                        let gz = GzDecoder::new(tar_file);
-                        Archive::new(Box::new(gz))
-                    },
-                    _ => {
-                        let xz = XzDecoder::new(tar_file);
-                        Archive::new(Box::new(xz))
-                    }
+                let mut archive: Archive<Box<dyn Read>> = {
+                    let xz = XzDecoder::new(tar_file);
+                    Archive::new(Box::new(xz))
                 };
 
                 archive.set_overwrite(true);

@@ -26,7 +26,7 @@ pub const ALPINE_FS_ROOT: &str = "/data/data/app.polarbear/files/alpine";
 #[cfg(test)]
 pub const ALPINE_FS_ROOT: &str = "/data/local/tmp/alpine";
 
-pub const ALPINE_FS_ARCHIVE: &str = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.1-aarch64.tar.gz";
+pub const ALPINE_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.25.0/alpine-aarch64-pd-v4.25.0.tar.xz";
 
 pub const WAYLAND_SOCKET_NAME: &str = "wayland-0";
 
