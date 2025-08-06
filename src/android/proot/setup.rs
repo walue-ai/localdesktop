@@ -178,6 +178,10 @@ fn setup_linux_fs(options: &SetupOptions) -> StageOutput {
                 }
 
                 // If we get here, extraction was successful
+                
+                // SOLUTION A & B: Verify package manager tools after successful extraction
+                verify_package_manager_tools(fs_root, &distribution, &mpsc_sender);
+                
                 break;
             }
 
@@ -519,4 +523,101 @@ pub fn setup(android_app: AndroidApp) -> PolarBearBackend {
     } else {
         PolarBearBackend::WebView(WebviewBackend::build(receiver, progress))
     }
+}
+
+/// Verify that package manager tools exist in the rootfs after extraction
+fn verify_package_manager_tools(fs_root: &Path, distribution: &str, mpsc_sender: &Sender<SetupMessage>) {
+    mpsc_sender
+        .send(SetupMessage::Progress(
+            format!("Verifying {} package manager tools...", distribution).to_string(),
+        ))
+        .unwrap_or(());
+
+    match distribution {
+        "void" => {
+            let xbps_query_path = fs_root.join("usr/bin/xbps-query");
+            let xbps_install_path = fs_root.join("usr/bin/xbps-install");
+            
+            log::info!("=== VOID LINUX PACKAGE MANAGER VERIFICATION ===");
+            log::info!("xbps-query exists: {}", xbps_query_path.exists());
+            log::info!("xbps-install exists: {}", xbps_install_path.exists());
+            
+            if xbps_query_path.exists() {
+                if let Ok(metadata) = std::fs::metadata(&xbps_query_path) {
+                    log::info!("xbps-query permissions: {:?}", metadata.permissions());
+                    log::info!("xbps-query size: {} bytes", metadata.len());
+                } else {
+                    log::warn!("Failed to get xbps-query metadata");
+                }
+            }
+            
+            if xbps_install_path.exists() {
+                if let Ok(metadata) = std::fs::metadata(&xbps_install_path) {
+                    log::info!("xbps-install permissions: {:?}", metadata.permissions());
+                    log::info!("xbps-install size: {} bytes", metadata.len());
+                } else {
+                    log::warn!("Failed to get xbps-install metadata");
+                }
+            }
+            
+            log::info!("=== SCANNING /usr/bin/ FOR XBPS TOOLS ===");
+            if let Ok(entries) = std::fs::read_dir(fs_root.join("usr/bin")) {
+                let mut xbps_tools = Vec::new();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with("xbps") {
+                        xbps_tools.push(name.clone());
+                        log::info!("Found XBPS tool: {}", name);
+                    }
+                }
+                log::info!("Total XBPS tools found: {}", xbps_tools.len());
+                if xbps_tools.is_empty() {
+                    log::error!("❌ NO XBPS TOOLS FOUND IN /usr/bin/ - This confirms the hypothesis!");
+                } else {
+                    log::info!("✅ XBPS tools found: {:?}", xbps_tools);
+                }
+            } else {
+                log::error!("Failed to read /usr/bin/ directory");
+            }
+            
+            let other_paths = ["bin", "sbin", "usr/sbin"];
+            for path in &other_paths {
+                let search_path = fs_root.join(path);
+                if let Ok(entries) = std::fs::read_dir(&search_path) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        if name.starts_with("xbps") {
+                            log::info!("Found XBPS tool in {}: {}", path, name);
+                        }
+                    }
+                }
+            }
+        },
+        _ => {
+            let pacman_path = fs_root.join("usr/bin/pacman");
+            log::info!("=== ARCH LINUX PACKAGE MANAGER VERIFICATION ===");
+            log::info!("pacman exists: {}", pacman_path.exists());
+            
+            if pacman_path.exists() {
+                if let Ok(metadata) = std::fs::metadata(&pacman_path) {
+                    log::info!("pacman permissions: {:?}", metadata.permissions());
+                    log::info!("pacman size: {} bytes", metadata.len());
+                }
+            }
+            
+            if let Ok(entries) = std::fs::read_dir(fs_root.join("usr/bin")) {
+                let mut pacman_tools = Vec::new();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with("pacman") {
+                        pacman_tools.push(name.clone());
+                        log::info!("Found pacman tool: {}", name);
+                    }
+                }
+                log::info!("Total pacman tools found: {}", pacman_tools.len());
+            }
+        }
+    }
+    
+    log::info!("=== PACKAGE MANAGER VERIFICATION COMPLETE ===");
 }
