@@ -64,16 +64,15 @@ pub struct CommandConfig {
 }
 
 fn default_check() -> String {
-    "pacman -Q xorg-xwayland && pacman -Qg xfce4 && pacman -Q onboard".to_string()
+    "pacman -Q bash".to_string()
 }
 
 fn default_install() -> String {
-    "stdbuf -oL pacman -Syu xorg-xwayland xfce4 onboard --noconfirm --noprogressbar".to_string()
+    "stdbuf -oL pacman -Syu bash coreutils util-linux procps-ng --noconfirm --noprogressbar".to_string()
 }
 
 fn default_launch() -> String {
-    "XDG_RUNTIME_DIR=/tmp Xwayland -hidpi :1 2>&1 & while [ ! -e /tmp/.X11-unix/X1 ]; do sleep 0.1; done; XDG_SESSION_TYPE=x11 DISPLAY=:1 dbus-launch startxfce4 2>&1"
-                .to_string()
+    "exec /bin/bash --login".to_string()
 }
 
 impl Default for CommandConfig {
