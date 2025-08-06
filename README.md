@@ -18,10 +18,60 @@ _Proof of Concept: A Pixel Tablet running the XFCE desktop environment inside a 
 
 ### How to build an APK
 
+#### Prerequisites
+
+Before building Android APKs, ensure you have the following dependencies installed:
+
+1. **Android NDK and SDK**: 
+   ```bash
+   # Install Android command line tools
+   sudo mkdir -p /opt/android-sdk
+   cd /opt/android-sdk
+   sudo wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+   sudo unzip commandlinetools-linux-11076708_latest.zip
+   sudo mkdir -p cmdline-tools/latest
+   sudo mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+   sudo chown -R $USER:$USER /opt/android-sdk
+   
+   # Set environment variables
+   export ANDROID_HOME=/opt/android-sdk
+   export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+   
+   # Accept licenses and install required components
+   yes | sdkmanager --licenses
+   sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+   ```
+
+2. **Build tools**:
+   ```bash
+   # Install required system packages
+   sudo apt update
+   sudo apt install -y openjdk-17-jdk clang lld wget unzip
+   
+   # Install xbuild
+   cargo install xbuild
+   ```
+
+#### Building APK
+
 ```bash
-cargo install xbuild
+# Build debug APK
 x build --platform android --arch arm64
+
+# Build release APK  
+x build --platform android --arch arm64 --release
+
+# Build Android App Bundle (AAB)
+x build --platform android --arch arm64 --format aab
 ```
+
+The generated APK files will be located in:
+- Debug: `target/x/debug/android/gradle/app/build/outputs/apk/debug/app-debug.apk`
+- Release: `target/x/debug/android/gradle/app/build/outputs/apk/release/app-release-unsigned.apk`
+
+AAB files will be in:
+- Debug: `target/x/debug/android/gradle/app/build/outputs/bundle/debug/app-debug.aab`
+- Release: `target/x/debug/android/gradle/app/build/outputs/bundle/release/app-release.aab`
 
 Alternatively, trigger the default build task by pressing `Ctrl+Shift+B`.
 
