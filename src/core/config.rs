@@ -130,9 +130,9 @@ fn default_void_launch() -> String {
 impl Default for CommandConfig {
     fn default() -> Self {
         Self {
-            check: default_check(),
-            install: default_install(),
-            launch: default_launch(),
+            check: String::new(),
+            install: String::new(),
+            launch: String::new(),
         }
     }
 }
