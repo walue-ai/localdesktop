@@ -270,7 +270,6 @@ fi
                 }
             }
 
-            // Create symbolic links to Android system utilities instead of shell scripts
             let system_utilities = [
                 "rm", "cp", "mv", "mkdir", "ls", "cat", "chmod", "chown", "ln", "touch", "grep", "sed", "awk"
             ];
@@ -280,16 +279,9 @@ fi
                 let system_cmd_path = format!("/system/bin/{}", cmd_name);
                 
                 if !cmd_path.exists() {
-                    // Try to create symbolic link to Android system binary
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::symlink;
-                        let _ = symlink(&system_cmd_path, &cmd_path);
-                    }
-                    
-                    if !cmd_path.exists() {
-                        if let Ok(content) = fs::read(&system_cmd_path) {
-                            let _ = fs::write(&cmd_path, content);
+                    // Copy the binary directly from Android system directory
+                    if let Ok(content) = fs::read(&system_cmd_path) {
+                        if let Ok(_) = fs::write(&cmd_path, content) {
                             #[cfg(unix)]
                             {
                                 let _ = fs::set_permissions(&cmd_path, fs::Permissions::from_mode(0o755));
