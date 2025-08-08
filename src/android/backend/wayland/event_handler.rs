@@ -129,7 +129,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.separator();
                                     if ui.button("Test Button").clicked() {
                                         log::info!("Egui button clicked!");
-                                        std::process::Command::new("weston-terminal").spawn().ok();
+                                        if let Err(e) = std::process::Command::new("weston-terminal")
+                                            .env("WAYLAND_DISPLAY", "wayland-0")
+                                            .spawn()
+                                        {
+                                            log::error!("Failed to start weston-terminal: {}", e);
+                                        } else {
+                                            log::info!("Successfully spawned weston-terminal");
+                                        }
                                     }
                                     if ui.button("Close Terminal").clicked() {
                                         log::info!("Close terminal requested!");
@@ -141,7 +148,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         0.9,
                     ) {
                         elements.push(WindowRenderElement::Egui(egui_element));
-                        log::info!("Egui UI rendered and added to elements with scale {}", scale_factor);
+                        // log::info!("Egui UI rendered and added to elements with scale {}", scale_factor);
                     }
 
                     let frame_result = renderer.render(&mut framebuffer, size, Transform::Flipped180);
