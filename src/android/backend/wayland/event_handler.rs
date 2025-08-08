@@ -193,7 +193,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             
                             egui::Window::new("LocalDesktop Debug")
                                 .default_pos([10.0, 10.0])
-                                .default_size([500.0 * scale_factor as f32, 400.0 * scale_factor as f32])
+                                .default_size([600.0 * scale_factor as f32, 600.0 * scale_factor as f32])
                                 .resizable(true)
                                 .show(ctx, |ui| {
                                     ui.heading("Wayland Compositor Active");
@@ -223,12 +223,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         {
                                             let mut terminal_state = TERMINAL_STATE.lock().unwrap();
                                             egui::ScrollArea::vertical()
-                                                .max_height(200.0 * scale_factor as f32)
+                                                .max_height(300.0 * scale_factor as f32)
                                                 .stick_to_bottom(true)
                                                 .show(ui, |ui| {
                                                     ui.add(egui::TextEdit::multiline(&mut terminal_state.output)
                                                         .desired_width(f32::INFINITY)
-                                                        .font(egui::TextStyle::Monospace));
+                                                        .desired_rows(15)
+                                                        .font(egui::TextStyle::Monospace)
+                                                        .interactive(false));
                                                 });
                                         }
                                         
@@ -239,9 +241,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 ui.label("$ ");
                                                 let response = ui.add(egui::TextEdit::singleline(&mut terminal_state.input)
                                                     .desired_width(f32::INFINITY)
-                                                    .font(egui::TextStyle::Monospace));
+                                                    .font(egui::TextStyle::Monospace)
+                                                    .hint_text("Type command and press Enter..."));
                                                 
-                                                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                                if (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || 
+                                                   (response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
                                                     execute_command = Some(terminal_state.input.clone());
                                                     terminal_state.input.clear();
                                                 }
