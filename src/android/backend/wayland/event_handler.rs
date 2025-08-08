@@ -4,6 +4,7 @@ use crate::{
         element::{WindowElement, WindowRenderElement},
         CentralizedEvent, WaylandBackend,
     },
+    android::proot::process::ArchProcess,
     core::{logging::PolarBearExpectation, config},
 };
 use std::sync::Mutex;
@@ -204,13 +205,13 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
                                         if compositor.state.show_terminal && !compositor.state.terminal_spawned {
-                                            log::info!("Spawning weston-terminal with WAYLAND_DISPLAY={}...", config::WAYLAND_SOCKET_NAME);
-                                            std::process::Command::new("weston-terminal")
-                                                .env("WAYLAND_DISPLAY", config::WAYLAND_SOCKET_NAME)
-                                                .spawn()
-                                                .ok();
+                                            log::info!("Spawning weston-terminal in proot environment...");
+                                            let wayland_cmd = format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} weston-terminal", config::WAYLAND_SOCKET_NAME);
+                                            ArchProcess::exec(&wayland_cmd).with_log(|log_line| {
+                                                log::info!("weston-terminal: {}", log_line);
+                                            });
                                             compositor.state.terminal_spawned = true;
-                                            log::info!("weston-terminal spawned, waiting for surface registration...");
+                                            log::info!("weston-terminal spawned in proot, waiting for surface registration...");
                                         }
                                     }
                                     
