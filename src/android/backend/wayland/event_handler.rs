@@ -105,7 +105,12 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.state.terminal_textures.clear();
                     
                     if compositor.state.show_terminal {
-                        for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                        let toplevel_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
+                        log::info!("Terminal surface detection: {} toplevel surfaces found", toplevel_surfaces.len());
+                        
+                        for (i, surface) in toplevel_surfaces.iter().enumerate() {
+                            log::info!("Processing surface {}", i);
+                            
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
@@ -116,10 +121,16 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     Kind::Unspecified,
                                 );
                             
-                            for element in &surface_elements {
+                            log::info!("Surface {} has {} render elements", i, surface_elements.len());
+                            
+                            for (j, element) in surface_elements.iter().enumerate() {
+                                log::info!("Element {}: buffer_size={}x{}", j, element.buffer_size().w, element.buffer_size().h);
+                                
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
                                     let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
+                                    
+                                    log::info!("Attempting texture conversion for surface element {}", j);
                                     
                                     if let Ok(mapping) = renderer.copy_texture(
                                         texture_id,
@@ -139,13 +150,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                             );
                                             
                                             compositor.state.terminal_textures.push(texture_handle);
+                                            log::info!("Successfully created texture for surface element {}", j);
+                                        } else {
+                                            log::warn!("Failed to map texture for surface element {}", j);
                                         }
+                                    } else {
+                                        log::warn!("Failed to copy texture for surface element {}", j);
                                     }
+                                } else {
+                                    log::info!("Surface element {} has no texture", j);
                                 }
                             }
                             
                             compositor.state.terminal_surface_elements.extend(surface_elements);
                         }
+                        
+                        log::info!("Terminal surface processing complete: {} textures created", compositor.state.terminal_textures.len());
                     }
 
                     let scale_factor = backend.scale_factor.max(3.0);
@@ -193,22 +213,29 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         ui.separator();
                                         ui.heading("Terminal Display");
                                         
+                                        let toplevel_count = compositor.state.xdg_shell_state.toplevel_surfaces().len();
+                                        ui.label(format!("Debug: {} toplevel surfaces detected", toplevel_count));
+                                        
                                         if !compositor.state.terminal_textures.is_empty() {
+                                            ui.label(format!("✅ {} terminal textures ready:", compositor.state.terminal_textures.len()));
                                             for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
                                                 ui.label(format!("Terminal Surface {}", i + 1));
                                                 ui.image((texture_handle.id(), texture_handle.size_vec2()));
                                             }
                                         } else if !compositor.state.terminal_surface_elements.is_empty() {
-                                            ui.label("Terminal surface detected but texture conversion failed...");
+                                            ui.label(format!("⚠️ {} surface elements detected but texture conversion failed", compositor.state.terminal_surface_elements.len()));
                                             for (i, element) in compositor.state.terminal_surface_elements.iter().enumerate() {
                                                 let buffer_size = element.buffer_size();
-                                                ui.label(format!("Surface {}: {}x{} (texture conversion pending)", 
+                                                ui.label(format!("Surface {}: {}x{} (texture conversion failed)", 
                                                     i + 1, buffer_size.w, buffer_size.h));
                                             }
+                                        } else if toplevel_count > 0 {
+                                            ui.label(format!("🔄 {} surfaces found but no render elements yet...", toplevel_count));
                                         } else if compositor.state.terminal_spawned {
-                                            ui.label("Terminal is running but surface not ready...");
+                                            ui.label("🕐 Terminal is running but surface not ready...");
+                                            ui.label("Check adb logcat for surface detection logs");
                                         } else {
-                                            ui.label("Waiting for terminal to connect...");
+                                            ui.label("⏳ Waiting for terminal to connect...");
                                         }
                                     }
                                 });
