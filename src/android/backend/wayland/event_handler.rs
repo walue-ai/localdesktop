@@ -4,7 +4,7 @@ use crate::{
         element::{WindowElement, WindowRenderElement},
         CentralizedEvent, WaylandBackend,
     },
-    core::logging::PolarBearExpectation,
+    core::{logging::PolarBearExpectation, config},
 };
 use std::sync::Mutex;
 use smithay::backend::input::{
@@ -204,8 +204,13 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
                                         if compositor.state.show_terminal && !compositor.state.terminal_spawned {
-                                            std::process::Command::new("weston-terminal").spawn().ok();
+                                            log::info!("Spawning weston-terminal with WAYLAND_DISPLAY={}...", config::WAYLAND_SOCKET_NAME);
+                                            std::process::Command::new("weston-terminal")
+                                                .env("WAYLAND_DISPLAY", config::WAYLAND_SOCKET_NAME)
+                                                .spawn()
+                                                .ok();
                                             compositor.state.terminal_spawned = true;
+                                            log::info!("weston-terminal spawned, waiting for surface registration...");
                                         }
                                     }
                                     

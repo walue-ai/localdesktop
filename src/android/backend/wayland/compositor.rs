@@ -83,6 +83,7 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        log::info!("New toplevel surface created - terminal surface may be ready");
         surface.with_pending_state(|state| {
             state.size.replace(self.size);
             state.states.set(xdg_toplevel::State::Activated);
@@ -133,6 +134,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        log::info!("Surface committed - buffer ready for rendering");
         on_commit_buffer_handler::<Self>(surface);
     }
 }
