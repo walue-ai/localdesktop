@@ -2,7 +2,8 @@ use std::{borrow::Cow, time::Duration};
 
 use smithay::{
     backend::renderer::{
-        element::{solid::SolidColorRenderElement, surface::WaylandSurfaceRenderElement},
+        element::{solid::SolidColorRenderElement, surface::WaylandSurfaceRenderElement, texture::TextureRenderElement},
+        gles::GlesTexture,
         ImportAll, ImportMem, Renderer,
     },
     desktop::{space::SpaceElement, utils::OutputPresentationFeedback, Window},
@@ -103,9 +104,10 @@ impl WaylandFocus for SSD {
 }
 
 render_elements!(
-    pub WindowRenderElement<R> where R: ImportAll + ImportMem;
+    pub WindowRenderElement<R> where R: ImportAll + ImportMem, R::TextureId: 'static;
     Window=WaylandSurfaceRenderElement<R>,
     Decoration=SolidColorRenderElement,
+    Egui=TextureRenderElement<R::TextureId>,
 );
 
 impl<R: Renderer> std::fmt::Debug for WindowRenderElement<R> {
@@ -113,6 +115,7 @@ impl<R: Renderer> std::fmt::Debug for WindowRenderElement<R> {
         match self {
             Self::Window(arg0) => f.debug_tuple("Window").field(arg0).finish(),
             Self::Decoration(arg0) => f.debug_tuple("Decoration").field(arg0).finish(),
+            Self::Egui(arg0) => f.debug_tuple("Egui").field(arg0).finish(),
             Self::_GenericCatcher(arg0) => f.debug_tuple("_GenericCatcher").field(arg0).finish(),
         }
     }

@@ -2,6 +2,8 @@ use super::bind::bind_socket;
 use crate::{
     android::backend::wayland::element::WindowElement, core::logging::PolarBearExpectation,
 };
+use crate::android::backend::wayland::egui::EguiState;
+use smithay::utils::Rectangle;
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     delegate_compositor, delegate_data_device, delegate_output, delegate_seat, delegate_shm,
@@ -64,6 +66,7 @@ pub struct State {
     pub seat_state: SeatState<Self>,
     pub size: Size<i32, Logical>,
     pub space: Space<WindowElement>,
+    pub egui_state: EguiState,
 }
 
 impl BufferHandler for State {
@@ -224,6 +227,7 @@ impl Compositor {
             seat_state,
             size: (1920, 1080).into(),
             space: Space::default(),
+            egui_state: EguiState::new(Rectangle::from_size((1920, 1080).into())),
         };
 
         Ok(Compositor {

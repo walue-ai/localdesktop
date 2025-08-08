@@ -1,7 +1,7 @@
 use crate::{
     android::backend::wayland::{
         compositor::{send_frames_surface_tree, ClientState, State},
-        element::WindowElement,
+        element::{WindowElement, WindowRenderElement},
         CentralizedEvent, WaylandBackend,
     },
     core::logging::PolarBearExpectation,
@@ -11,10 +11,10 @@ use smithay::backend::input::{
     PointerButtonEvent, TouchEvent,
 };
 use smithay::backend::renderer::element::surface::{
-    render_elements_from_surface_tree, WaylandSurfaceRenderElement,
+    render_elements_from_surface_tree,
 };
 use smithay::backend::renderer::element::Kind;
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::glow::GlowRenderer;
 use smithay::backend::renderer::utils::draw_render_elements;
 use smithay::backend::renderer::{Color32F, Frame, Renderer};
 use smithay::desktop::Space;
@@ -79,7 +79,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let compositor = &mut backend.compositor;
 
-                    let elements = compositor
+                    let mut elements: Vec<WindowRenderElement<GlowRenderer>> = compositor
                         .state
                         .xdg_shell_state
                         .toplevel_surfaces()
@@ -94,16 +94,68 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 Kind::Unspecified,
                             )
                         })
-                        .collect::<Vec<WaylandSurfaceRenderElement<GlesRenderer>>>();
+                        .map(WindowRenderElement::Window)
+                        .collect();
 
-                    let mut frame = renderer
-                        .render(&mut framebuffer, size, Transform::Flipped180)
-                        .unwrap();
+                    let scale_factor = backend.scale_factor.max(3.0);
+
+                    if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
+                        renderer,
+                        |ctx| {
+                            let mut style = (*ctx.style()).clone();
+                            style.text_styles.insert(
+                                egui::TextStyle::Body,
+                                egui::FontId::new(18.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                            );
+                            style.text_styles.insert(
+                                egui::TextStyle::Button,
+                                egui::FontId::new(16.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                            );
+                            style.text_styles.insert(
+                                egui::TextStyle::Heading,
+                                egui::FontId::new(24.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                            );
+                            ctx.set_style(style);
+                            
+                            egui::Window::new("LocalDesktop Debug")
+                                .default_pos([10.0, 10.0])
+                                .default_size([400.0 * scale_factor as f32, 300.0 * scale_factor as f32])
+                                .resizable(true)
+                                .show(ctx, |ui| {
+                                    ui.heading("Wayland Compositor Active");
+                                    ui.label(format!("Windows: {}", compositor.state.space.elements().count()));
+                                    ui.label(format!("Scale Factor: {:.1}", scale_factor));
+                                    ui.label(format!("Screen Size: {}x{}", size.w, size.h));
+                                    ui.separator();
+                                    if ui.button("Test Button").clicked() {
+                                        log::info!("Egui button clicked!");
+                                    }
+                                    if ui.button("Close Terminal").clicked() {
+                                        log::info!("Close terminal requested!");
+                                    }
+                                });
+                        },
+                        Rectangle::from_size((size.w, size.h).into()),
+                        scale_factor,
+                        0.9,
+                    ) {
+                        elements.push(WindowRenderElement::Egui(egui_element));
+                        log::info!("Egui UI rendered and added to elements with scale {}", scale_factor);
+                    }
+
+                    let frame_result = renderer.render(&mut framebuffer, size, Transform::Flipped180);
+                    let mut frame = match frame_result {
+                        Ok(frame) => frame,
+                        Err(err) => {
+                            log::error!("Failed to create render frame: {:?}", err);
+                            return;
+                        }
+                    };
                     frame
                         .clear(Color32F::new(0.1, 0.0, 0.0, 1.0), &[damage])
                         .unwrap();
                     draw_render_elements(&mut frame, 1.0, &elements, &[damage]).unwrap();
-                    // We rely on the nested compositor to do the sync for us
+
                     let _ = frame.finish().unwrap();
 
                     for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {

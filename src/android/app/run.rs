@@ -30,9 +30,10 @@ impl ApplicationHandler for PolarBearApp {
                 // Initialize the Wayland backend
                 let winit = bind(&event_loop);
                 let window_size = winit.window_size();
-                let scale_factor = winit.scale_factor();
+                let scale_factor = winit.scale_factor().max(2.0);
                 let size = (window_size.w, window_size.h);
                 backend.graphic_renderer = Some(winit);
+                backend.scale_factor = scale_factor;
                 backend.compositor.state.size = size.into();
 
                 // Create the Output with given name and physical properties.
