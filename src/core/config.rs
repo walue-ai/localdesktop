@@ -72,7 +72,7 @@ fn default_install() -> String {
 }
 
 fn default_launch() -> String {
-    "XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY=wayland-0 weston-terminal".to_string()
+    "true".to_string()
 }
 
 impl Default for CommandConfig {
