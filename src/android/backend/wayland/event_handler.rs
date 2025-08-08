@@ -129,6 +129,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.separator();
                                     if ui.button("Test Button").clicked() {
                                         log::info!("Egui button clicked!");
+                                        std::process::Command::new("weston-terminal").spawn().ok();
                                     }
                                     if ui.button("Close Terminal").clicked() {
                                         log::info!("Close terminal requested!");
@@ -243,27 +244,29 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     true
                 );
                 
-                let state = &mut compositor.state;
-                if let Some(surface) = get_surface(state) {
-                    compositor.keyboard.set_focus(
-                        state,
-                        Some(surface.wl_surface().clone()),
-                        0.into(),
-                    );
-                    let serial = SERIAL_COUNTER.next_serial();
-                    let time = compositor.start_time.elapsed().as_millis() as u32;
-                    
-                    compositor.touch.down(
-                        state,
-                        Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                        &touch::DownEvent {
-                            slot: event.slot(),
-                            location: (event.x(), event.y()).into(),
-                            serial,
-                            time,
-                        },
-                    );
-                };
+                if !compositor.state.egui_state.wants_pointer() {
+                    let state = &mut compositor.state;
+                    if let Some(surface) = get_surface(state) {
+                        compositor.keyboard.set_focus(
+                            state,
+                            Some(surface.wl_surface().clone()),
+                            0.into(),
+                        );
+                        let serial = SERIAL_COUNTER.next_serial();
+                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        
+                        compositor.touch.down(
+                            state,
+                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                            &touch::DownEvent {
+                                slot: event.slot(),
+                                location: (event.x(), event.y()).into(),
+                                serial,
+                                time,
+                            },
+                        );
+                    };
+                }
             }
             InputEvent::TouchUp { event } => {
                 let compositor = &mut backend.compositor;
@@ -273,20 +276,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     false
                 );
                 
-                let state = &mut compositor.state;
-                if let Some(_surface) = get_surface(state) {
-                    let serial = SERIAL_COUNTER.next_serial();
-                    let time = compositor.start_time.elapsed().as_millis() as u32;
-                    
-                    compositor.touch.up(
-                        state,
-                        &touch::UpEvent {
-                            slot: event.slot(),
-                            serial,
-                            time,
-                        },
-                    );
-                };
+                if !compositor.state.egui_state.wants_pointer() {
+                    let state = &mut compositor.state;
+                    if let Some(_surface) = get_surface(state) {
+                        let serial = SERIAL_COUNTER.next_serial();
+                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        
+                        compositor.touch.up(
+                            state,
+                            &touch::UpEvent {
+                                slot: event.slot(),
+                                serial,
+                                time,
+                            },
+                        );
+                    };
+                }
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
@@ -294,20 +299,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let touch_location = (event.x(), event.y()).into();
                 compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
-                let state = &mut compositor.state;
-                if let Some(surface) = get_surface(state) {
-                    let time = compositor.start_time.elapsed().as_millis() as u32;
-                    
-                    compositor.touch.motion(
-                        state,
-                        Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                        &touch::MotionEvent {
-                            slot: event.slot(),
-                            location: (event.x(), event.y()).into(),
-                            time,
-                        },
-                    );
-                };
+                if !compositor.state.egui_state.wants_pointer() {
+                    let state = &mut compositor.state;
+                    if let Some(surface) = get_surface(state) {
+                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        
+                        compositor.touch.motion(
+                            state,
+                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                            &touch::MotionEvent {
+                                slot: event.slot(),
+                                location: (event.x(), event.y()).into(),
+                                time,
+                            },
+                        );
+                    };
+                }
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let compositor = &mut backend.compositor;
