@@ -67,6 +67,10 @@ pub struct State {
     pub size: Size<i32, Logical>,
     pub space: Space<WindowElement>,
     pub egui_state: EguiState,
+    pub show_terminal: bool,
+    pub terminal_spawned: bool,
+    pub terminal_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
+    pub terminal_textures: Vec<egui::TextureHandle>,
 }
 
 impl BufferHandler for State {
@@ -228,6 +232,10 @@ impl Compositor {
             size: (1920, 1080).into(),
             space: Space::default(),
             egui_state: EguiState::new(Rectangle::from_size((1920, 1080).into())),
+            show_terminal: false,
+            terminal_spawned: false,
+            terminal_surface_elements: Vec::new(),
+            terminal_textures: Vec::new(),
         };
 
         Ok(Compositor {

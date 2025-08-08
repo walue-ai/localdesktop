@@ -4,7 +4,6 @@ use crate::{
         element::{WindowElement, WindowRenderElement},
         CentralizedEvent, WaylandBackend,
     },
-    android::proot::process::ArchProcess,
     core::logging::PolarBearExpectation,
 };
 use std::sync::Mutex;
@@ -13,92 +12,23 @@ use smithay::backend::input::{
     PointerButtonEvent, TouchEvent,
 };
 use smithay::backend::renderer::element::surface::{
-    render_elements_from_surface_tree,
+    render_elements_from_surface_tree, WaylandSurfaceRenderElement, WaylandSurfaceTexture,
 };
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::glow::GlowRenderer;
 use smithay::backend::renderer::utils::draw_render_elements;
-use smithay::backend::renderer::{Color32F, Frame, Renderer};
+use smithay::backend::renderer::{Color32F, Frame, Renderer, ExportMem};
 use smithay::desktop::Space;
 use smithay::input::keyboard::FilterResult;
 use smithay::input::{pointer, touch};
 use smithay::reexports::wayland_server::protocol::wl_pointer::ButtonState;
 use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
 use smithay::wayland::shell::xdg::ToplevelSurface;
+use smithay::backend::allocator::Fourcc;
+use egui::{ColorImage, TextureHandle};
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 
-#[derive(Default)]
-struct TerminalState {
-    visible: bool,
-    input: String,
-    output: String,
-    command_history: Vec<String>,
-    history_index: usize,
-}
-
-impl TerminalState {
-    fn new() -> Self {
-        Self {
-            visible: false,
-            input: String::new(),
-            output: String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ "),
-            command_history: Vec::new(),
-            history_index: 0,
-        }
-    }
-}
-
-static TERMINAL_STATE: Mutex<TerminalState> = Mutex::new(TerminalState {
-    visible: false,
-    input: String::new(),
-    output: String::new(),
-    command_history: Vec::new(),
-    history_index: 0,
-});
-
-fn execute_terminal_command(command: &str) {
-    if command.trim().is_empty() {
-        return;
-    }
-    
-    let mut terminal_state = TERMINAL_STATE.lock().unwrap();
-    
-    terminal_state.command_history.push(command.to_string());
-    terminal_state.history_index = terminal_state.command_history.len();
-    
-    terminal_state.output.push_str(&format!("{}\n", command));
-    
-    let process = ArchProcess::exec(command);
-    match process.wait_with_output() {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            
-            if !stdout.is_empty() {
-                terminal_state.output.push_str(&stdout);
-            }
-            if !stderr.is_empty() {
-                terminal_state.output.push_str(&stderr);
-            }
-            
-            if !output.status.success() {
-                terminal_state.output.push_str(&format!("Command exited with status: {}\n", output.status));
-            }
-        }
-        Err(e) => {
-            terminal_state.output.push_str(&format!("Error executing command: {}\n", e));
-        }
-    }
-    
-    terminal_state.output.push_str("$ ");
-    
-    let lines: Vec<&str> = terminal_state.output.lines().collect();
-    if lines.len() > 1000 {
-        terminal_state.output = lines[lines.len() - 1000..].join("\n");
-        terminal_state.output.push('\n');
-    }
-}
 
 /**
  * As we currently use Xwayland, there is only 1 surface
@@ -171,6 +101,53 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         .map(WindowRenderElement::Window)
                         .collect();
 
+                    compositor.state.terminal_surface_elements.clear();
+                    compositor.state.terminal_textures.clear();
+                    
+                    if compositor.state.show_terminal {
+                        for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                            let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
+                                render_elements_from_surface_tree(
+                                    renderer,
+                                    surface.wl_surface(),
+                                    (0, 0),
+                                    1.0,
+                                    1.0,
+                                    Kind::Unspecified,
+                                );
+                            
+                            for element in &surface_elements {
+                                if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
+                                    let buffer_size = element.buffer_size();
+                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
+                                    
+                                    if let Ok(mapping) = renderer.copy_texture(
+                                        texture_id,
+                                        region,
+                                        Fourcc::Abgr8888,
+                                    ) {
+                                        if let Ok(pixel_data) = renderer.map_texture(&mapping) {
+                                            let color_image = ColorImage::from_rgba_unmultiplied(
+                                                [buffer_size.w as usize, buffer_size.h as usize],
+                                                pixel_data,
+                                            );
+                                            
+                                            let texture_handle = compositor.state.egui_state.context().load_texture(
+                                                format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
+                                                color_image,
+                                                egui::TextureOptions::default(),
+                                            );
+                                            
+                                            compositor.state.terminal_textures.push(texture_handle);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            compositor.state.terminal_surface_elements.extend(surface_elements);
+                        }
+                    }
+
                     let scale_factor = backend.scale_factor.max(3.0);
 
                     if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
@@ -202,83 +179,36 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.label(format!("Screen Size: {}x{}", size.w, size.h));
                                     ui.separator();
                                     
-                                    let terminal_visible = {
-                                        let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+                                    if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
+                                        log::info!("Terminal button clicked!");
+                                        compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
-                                        if ui.button(if terminal_state.visible { "Hide Terminal" } else { "Open Terminal" }).clicked() {
-                                            log::info!("Terminal button clicked!");
-                                            terminal_state.visible = !terminal_state.visible;
-                                            if terminal_state.visible && terminal_state.output.is_empty() {
-                                                terminal_state.output = String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ ");
-                                            }
-                                        }
-                                        
-                                        terminal_state.visible
-                                    };
-                                    
-                                    if terminal_visible {
-                                        ui.separator();
-                                        ui.heading("Terminal");
-                                        
-                                        {
-                                            let mut terminal_state = TERMINAL_STATE.lock().unwrap();
-                                            egui::ScrollArea::vertical()
-                                                .max_height(500.0 * scale_factor as f32)
-                                                .stick_to_bottom(true)
-                                                .show(ui, |ui| {
-                                                    ui.add(egui::TextEdit::multiline(&mut terminal_state.output)
-                                                        .desired_width(f32::INFINITY)
-                                                        .desired_rows(30)
-                                                        .font(egui::TextStyle::Monospace)
-                                                        .interactive(false));
-                                                });
-                                        }
-                                        
-                                        let mut execute_command = None;
-                                        {
-                                            let mut terminal_state = TERMINAL_STATE.lock().unwrap();
-                                            ui.horizontal(|ui| {
-                                                ui.label("$ ");
-                                                let response = ui.add(egui::TextEdit::singleline(&mut terminal_state.input)
-                                                    .desired_width(f32::INFINITY)
-                                                    .font(egui::TextStyle::Monospace)
-                                                    .hint_text("Type command and press Enter..."));
-                                                
-                                                if (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || 
-                                                   (response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
-                                                    execute_command = Some(terminal_state.input.clone());
-                                                    terminal_state.input.clear();
-                                                }
-                                                
-                                                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && !terminal_state.command_history.is_empty() {
-                                                    if terminal_state.history_index > 0 {
-                                                        terminal_state.history_index -= 1;
-                                                        terminal_state.input = terminal_state.command_history[terminal_state.history_index].clone();
-                                                    }
-                                                }
-                                                
-                                                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !terminal_state.command_history.is_empty() {
-                                                    if terminal_state.history_index < terminal_state.command_history.len() - 1 {
-                                                        terminal_state.history_index += 1;
-                                                        terminal_state.input = terminal_state.command_history[terminal_state.history_index].clone();
-                                                    } else {
-                                                        terminal_state.history_index = terminal_state.command_history.len();
-                                                        terminal_state.input.clear();
-                                                    }
-                                                }
-                                            });
-                                        }
-                                        
-                                        if let Some(command) = execute_command {
-                                            execute_terminal_command(&command);
+                                        if compositor.state.show_terminal && !compositor.state.terminal_spawned {
+                                            std::process::Command::new("weston-terminal").spawn().ok();
+                                            compositor.state.terminal_spawned = true;
                                         }
                                     }
                                     
-                                    {
-                                        let mut terminal_state = TERMINAL_STATE.lock().unwrap();
-                                        if ui.button("Clear Terminal").clicked() {
-                                            terminal_state.output = String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ ");
-                                            log::info!("Terminal cleared!");
+                                    if compositor.state.show_terminal {
+                                        ui.separator();
+                                        ui.heading("Terminal Display");
+                                        
+                                        if !compositor.state.terminal_textures.is_empty() {
+                                            for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
+                                                ui.label(format!("Terminal Surface {}", i + 1));
+                                                ui.image((texture_handle.id(), texture_handle.size_vec2()));
+                                            }
+                                        } else if !compositor.state.terminal_surface_elements.is_empty() {
+                                            ui.label("Terminal surface detected but texture conversion failed...");
+                                            for (i, element) in compositor.state.terminal_surface_elements.iter().enumerate() {
+                                                let buffer_size = element.buffer_size();
+                                                ui.label(format!("Surface {}: {}x{} (texture conversion pending)", 
+                                                    i + 1, buffer_size.w, buffer_size.h));
+                                            }
+                                        } else if compositor.state.terminal_spawned {
+                                            ui.label("Terminal is running but surface not ready...");
+                                        } else {
+                                            ui.label("Waiting for terminal to connect...");
                                         }
                                     }
                                 });
@@ -311,6 +241,16 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             surface.wl_surface(),
                             compositor.start_time.elapsed().as_millis() as u32,
                         );
+                    }
+
+                    let terminal_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
+                    if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
+                        if let Some(surface) = terminal_surfaces.first() {
+                            let surface_clone = surface.wl_surface().clone();
+                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
+                        }
+                    } else if !compositor.state.show_terminal {
+                        compositor.keyboard.set_focus(&mut compositor.state, None, SERIAL_COUNTER.next_serial());
                     }
 
                     if let Some(stream) = compositor
