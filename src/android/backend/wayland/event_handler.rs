@@ -7,6 +7,7 @@ use crate::{
     android::proot::process::ArchProcess,
     core::logging::PolarBearExpectation,
 };
+use std::sync::Mutex;
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, Event, InputEvent, KeyboardKeyEvent, PointerAxisEvent,
     PointerButtonEvent, TouchEvent,
@@ -26,6 +27,78 @@ use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
 use smithay::wayland::shell::xdg::ToplevelSurface;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
+
+#[derive(Default)]
+struct TerminalState {
+    visible: bool,
+    input: String,
+    output: String,
+    command_history: Vec<String>,
+    history_index: usize,
+}
+
+impl TerminalState {
+    fn new() -> Self {
+        Self {
+            visible: false,
+            input: String::new(),
+            output: String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ "),
+            command_history: Vec::new(),
+            history_index: 0,
+        }
+    }
+}
+
+static TERMINAL_STATE: Mutex<TerminalState> = Mutex::new(TerminalState {
+    visible: false,
+    input: String::new(),
+    output: String::new(),
+    command_history: Vec::new(),
+    history_index: 0,
+});
+
+fn execute_terminal_command(command: &str) {
+    if command.trim().is_empty() {
+        return;
+    }
+    
+    let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+    
+    terminal_state.command_history.push(command.to_string());
+    terminal_state.history_index = terminal_state.command_history.len();
+    
+    terminal_state.output.push_str(&format!("{}\n", command));
+    
+    let process = ArchProcess::exec(command);
+    match process.wait_with_output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            
+            if !stdout.is_empty() {
+                terminal_state.output.push_str(&stdout);
+            }
+            if !stderr.is_empty() {
+                terminal_state.output.push_str(&stderr);
+            }
+            
+            if !output.status.success() {
+                terminal_state.output.push_str(&format!("Command exited with status: {}\n", output.status));
+            }
+        }
+        Err(e) => {
+            terminal_state.output.push_str(&format!("Error executing command: {}\n", e));
+        }
+    }
+    
+    terminal_state.output.push_str("$ ");
+    
+    let lines: Vec<&str> = terminal_state.output.lines().collect();
+    if lines.len() > 1000 {
+        terminal_state.output = lines[lines.len() - 1000..].join("\n");
+        terminal_state.output.push('\n');
+    }
+}
 
 /**
  * As we currently use Xwayland, there is only 1 surface
@@ -120,7 +193,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             
                             egui::Window::new("LocalDesktop Debug")
                                 .default_pos([10.0, 10.0])
-                                .default_size([400.0 * scale_factor as f32, 300.0 * scale_factor as f32])
+                                .default_size([500.0 * scale_factor as f32, 400.0 * scale_factor as f32])
                                 .resizable(true)
                                 .show(ctx, |ui| {
                                     ui.heading("Wayland Compositor Active");
@@ -128,23 +201,81 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.label(format!("Scale Factor: {:.1}", scale_factor));
                                     ui.label(format!("Screen Size: {}x{}", size.w, size.h));
                                     ui.separator();
-                                    if ui.button("Test Button").clicked() {
-                                        log::info!("Egui button clicked!");
-                                        let process = ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 weston-terminal");
-                                        match process.wait() {
-                                            Ok(status) if status.success() => {
-                                                log::info!("Successfully spawned weston-terminal");
-                                            }
-                                            Ok(status) => {
-                                                log::error!("weston-terminal exited with status: {}", status);
-                                            }
-                                            Err(e) => {
-                                                log::error!("Failed to start weston-terminal: {}", e);
+                                    
+                                    let terminal_visible = {
+                                        let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+                                        
+                                        if ui.button(if terminal_state.visible { "Hide Terminal" } else { "Open Terminal" }).clicked() {
+                                            log::info!("Terminal button clicked!");
+                                            terminal_state.visible = !terminal_state.visible;
+                                            if terminal_state.visible && terminal_state.output.is_empty() {
+                                                terminal_state.output = String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ ");
                                             }
                                         }
+                                        
+                                        terminal_state.visible
+                                    };
+                                    
+                                    if terminal_visible {
+                                        ui.separator();
+                                        ui.heading("Terminal");
+                                        
+                                        {
+                                            let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+                                            egui::ScrollArea::vertical()
+                                                .max_height(200.0 * scale_factor as f32)
+                                                .stick_to_bottom(true)
+                                                .show(ui, |ui| {
+                                                    ui.add(egui::TextEdit::multiline(&mut terminal_state.output)
+                                                        .desired_width(f32::INFINITY)
+                                                        .font(egui::TextStyle::Monospace));
+                                                });
+                                        }
+                                        
+                                        let mut execute_command = None;
+                                        {
+                                            let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+                                            ui.horizontal(|ui| {
+                                                ui.label("$ ");
+                                                let response = ui.add(egui::TextEdit::singleline(&mut terminal_state.input)
+                                                    .desired_width(f32::INFINITY)
+                                                    .font(egui::TextStyle::Monospace));
+                                                
+                                                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                                    execute_command = Some(terminal_state.input.clone());
+                                                    terminal_state.input.clear();
+                                                }
+                                                
+                                                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && !terminal_state.command_history.is_empty() {
+                                                    if terminal_state.history_index > 0 {
+                                                        terminal_state.history_index -= 1;
+                                                        terminal_state.input = terminal_state.command_history[terminal_state.history_index].clone();
+                                                    }
+                                                }
+                                                
+                                                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !terminal_state.command_history.is_empty() {
+                                                    if terminal_state.history_index < terminal_state.command_history.len() - 1 {
+                                                        terminal_state.history_index += 1;
+                                                        terminal_state.input = terminal_state.command_history[terminal_state.history_index].clone();
+                                                    } else {
+                                                        terminal_state.history_index = terminal_state.command_history.len();
+                                                        terminal_state.input.clear();
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        
+                                        if let Some(command) = execute_command {
+                                            execute_terminal_command(&command);
+                                        }
                                     }
-                                    if ui.button("Close Terminal").clicked() {
-                                        log::info!("Close terminal requested!");
+                                    
+                                    {
+                                        let mut terminal_state = TERMINAL_STATE.lock().unwrap();
+                                        if ui.button("Clear Terminal").clicked() {
+                                            terminal_state.output = String::from("Terminal ready. Type commands to execute in Arch Linux environment.\n$ ");
+                                            log::info!("Terminal cleared!");
+                                        }
                                     }
                                 });
                         },
