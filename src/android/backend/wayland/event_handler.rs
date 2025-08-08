@@ -4,6 +4,7 @@ use crate::{
         element::{WindowElement, WindowRenderElement},
         CentralizedEvent, WaylandBackend,
     },
+    android::proot::process::ArchProcess,
     core::logging::PolarBearExpectation,
 };
 use smithay::backend::input::{
@@ -129,13 +130,17 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.separator();
                                     if ui.button("Test Button").clicked() {
                                         log::info!("Egui button clicked!");
-                                        if let Err(e) = std::process::Command::new("weston-terminal")
-                                            .env("WAYLAND_DISPLAY", "wayland-0")
-                                            .spawn()
-                                        {
-                                            log::error!("Failed to start weston-terminal: {}", e);
-                                        } else {
-                                            log::info!("Successfully spawned weston-terminal");
+                                        let process = ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 weston-terminal");
+                                        match process.wait() {
+                                            Ok(status) if status.success() => {
+                                                log::info!("Successfully spawned weston-terminal");
+                                            }
+                                            Ok(status) => {
+                                                log::error!("weston-terminal exited with status: {}", status);
+                                            }
+                                            Err(e) => {
+                                                log::error!("Failed to start weston-terminal: {}", e);
+                                            }
                                         }
                                     }
                                     if ui.button("Close Terminal").clicked() {
