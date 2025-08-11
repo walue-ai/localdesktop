@@ -205,36 +205,44 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
                                         if compositor.state.show_terminal && !compositor.state.terminal_spawned {
-                                            log::info!("Spawning terminal in proot environment...");
+                                            log::info!("Spawning terminal with simple command...");
                                             
-                                            let check_cmd = "which weston-terminal || echo 'weston-terminal not found'";
-                                            ArchProcess::exec(check_cmd).with_log(|log_line| {
-                                                log::info!("Terminal check: {}", log_line);
-                                            });
-                                            
-                                            let terminal_commands = vec![
-                                                format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} weston-terminal", config::WAYLAND_SOCKET_NAME),
-                                                format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} xterm", config::WAYLAND_SOCKET_NAME),
-                                                format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} gnome-terminal", config::WAYLAND_SOCKET_NAME),
-                                                format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} konsole", config::WAYLAND_SOCKET_NAME),
-                                                "bash".to_string(),
-                                            ];
-                                            
-                                            for (i, cmd) in terminal_commands.iter().enumerate() {
-                                                log::info!("Trying terminal command {}: {}", i + 1, cmd);
-                                                let process = ArchProcess::exec(cmd);
+                                            if let Ok(_) = std::process::Command::new("weston-terminal")
+                                                .env("WAYLAND_DISPLAY", config::WAYLAND_SOCKET_NAME)
+                                                .env("XDG_RUNTIME_DIR", "/tmp")
+                                                .spawn() {
+                                                log::info!("Simple terminal spawn successful");
+                                                compositor.state.terminal_spawned = true;
+                                            } else {
+                                                log::warn!("Simple terminal spawn failed, trying proot approach...");
                                                 
-                                                std::thread::spawn(move || {
-                                                    process.with_log(|log_line| {
-                                                        log::info!("Terminal output: {}", log_line);
-                                                    });
+                                                let check_cmd = "which weston-terminal || echo 'weston-terminal not found'";
+                                                ArchProcess::exec(check_cmd).with_log(|log_line| {
+                                                    log::info!("Terminal check: {}", log_line);
                                                 });
                                                 
-                                                std::thread::sleep(std::time::Duration::from_millis(500));
-                                                break;
+                                                let terminal_commands = vec![
+                                                    format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} weston-terminal", config::WAYLAND_SOCKET_NAME),
+                                                    format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} xterm", config::WAYLAND_SOCKET_NAME),
+                                                ];
+                                                
+                                                for (i, cmd) in terminal_commands.iter().enumerate() {
+                                                    log::info!("Trying terminal command {}: {}", i + 1, cmd);
+                                                    let process = ArchProcess::exec(cmd);
+                                                    
+                                                    std::thread::spawn(move || {
+                                                        process.with_log(|log_line| {
+                                                            log::info!("Terminal output: {}", log_line);
+                                                        });
+                                                    });
+                                                    
+                                                    std::thread::sleep(std::time::Duration::from_millis(500));
+                                                    break;
+                                                }
+                                                
+                                                compositor.state.terminal_spawned = true;
                                             }
                                             
-                                            compositor.state.terminal_spawned = true;
                                             log::info!("Terminal spawn attempted, waiting for surface registration...");
                                         }
                                     }
@@ -302,9 +310,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let terminal_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
                     if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
-                        if let Some(surface) = terminal_surfaces.first() {
-                            let surface_clone = surface.wl_surface().clone();
-                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
+                        if !compositor.state.egui_state.wants_keyboard() {
+                            if let Some(surface) = terminal_surfaces.first() {
+                                let surface_clone = surface.wl_surface().clone();
+                                compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
+                            }
                         }
                     } else if !compositor.state.show_terminal {
                         compositor.keyboard.set_focus(&mut compositor.state, None, SERIAL_COUNTER.next_serial());
