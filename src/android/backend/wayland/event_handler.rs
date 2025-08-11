@@ -255,25 +255,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         ui.label(format!("Debug: {} toplevel surfaces detected", toplevel_count));
                                         
                                         if !compositor.state.terminal_textures.is_empty() {
-                                            ui.label(format!("✅ {} terminal textures ready:", compositor.state.terminal_textures.len()));
+                                            ui.label("Terminal Display:");
                                             for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
                                                 ui.label(format!("Terminal Surface {}", i + 1));
                                                 ui.image((texture_handle.id(), texture_handle.size_vec2()));
                                             }
                                         } else if !compositor.state.terminal_surface_elements.is_empty() {
-                                            ui.label(format!("⚠️ {} surface elements detected but texture conversion failed", compositor.state.terminal_surface_elements.len()));
+                                            ui.label("Terminal surface detected but texture conversion failed...");
                                             for (i, element) in compositor.state.terminal_surface_elements.iter().enumerate() {
                                                 let buffer_size = element.buffer_size();
-                                                ui.label(format!("Surface {}: {}x{} (texture conversion failed)", 
+                                                ui.label(format!("Surface {}: {}x{} (texture conversion pending)", 
                                                     i + 1, buffer_size.w, buffer_size.h));
                                             }
-                                        } else if toplevel_count > 0 {
-                                            ui.label(format!("🔄 {} surfaces found but no render elements yet...", toplevel_count));
                                         } else if compositor.state.terminal_spawned {
-                                            ui.label("🕐 Terminal is running but surface not ready...");
-                                            ui.label("Check adb logcat for surface detection logs");
+                                            ui.label("Terminal is running but surface not ready...");
                                         } else {
-                                            ui.label("⏳ Waiting for terminal to connect...");
+                                            ui.label("Waiting for terminal to connect...");
                                         }
                                     }
                                 });
