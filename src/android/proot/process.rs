@@ -115,12 +115,27 @@ impl ArchProcess {
     }
 
     pub fn with_log(self, mut log: impl FnMut(String)) {
-        if let Some(child) = self.process {
-            let reader = BufReader::new(child.stdout.unwrap());
-            for line in reader.lines() {
-                let line = line.unwrap();
-                log(line);
+        if let Some(mut child) = self.process {
+            if let Some(stdout) = child.stdout.take() {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines() {
+                    match line {
+                        Ok(line) => log(line),
+                        Err(e) => log(format!("Error reading stdout: {}", e)),
+                    }
+                }
             }
+            
+            match child.wait() {
+                Ok(status) => {
+                    if !status.success() {
+                        log(format!("Process exited with status: {}", status));
+                    }
+                }
+                Err(e) => log(format!("Error waiting for process: {}", e)),
+            }
+        } else {
+            log("No process to read from".to_string());
         }
     }
 
