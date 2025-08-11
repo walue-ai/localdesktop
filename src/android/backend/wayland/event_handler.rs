@@ -89,12 +89,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         .xdg_shell_state
                         .toplevel_surfaces()
                         .iter()
-                        .filter(|_surface| {
-                            // Skip terminal surfaces when show_terminal is true
-                            // This prevents them from being rendered directly by the compositor (important-comment)
-                            // when they're already being displayed in EGUI
-                            !compositor.state.show_terminal
-                        })
                         .flat_map(|surface| {
                             render_elements_from_surface_tree(
                                 renderer,
@@ -112,13 +106,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.state.terminal_textures.clear();
                     
                     if compositor.state.show_terminal {
-                        let toplevel_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
-                        log::info!("Terminal surface detection: {} toplevel surfaces found", toplevel_surfaces.len());
-                        
-                        for (i, surface) in toplevel_surfaces.iter().enumerate() {
-                            log::info!("Processing surface {}", i);
-                            
-                            let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
+                        for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                            let elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
@@ -128,16 +117,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     Kind::Unspecified,
                                 );
                             
-                            log::info!("Surface {} has {} render elements", i, surface_elements.len());
-                            
-                            for (j, element) in surface_elements.iter().enumerate() {
-                                log::info!("Element {}: buffer_size={}x{}", j, element.buffer_size().w, element.buffer_size().h);
-                                
+                            for element in &elements {
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
                                     let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
-                                    
-                                    log::info!("Attempting texture conversion for surface element {}", j);
                                     
                                     if let Ok(mapping) = renderer.copy_texture(
                                         texture_id,
@@ -157,22 +140,13 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                             );
                                             
                                             compositor.state.terminal_textures.push(texture_handle);
-                                            log::info!("Successfully created texture for surface element {}", j);
-                                        } else {
-                                            log::warn!("Failed to map texture for surface element {}", j);
                                         }
-                                    } else {
-                                        log::warn!("Failed to copy texture for surface element {}", j);
                                     }
-                                } else {
-                                    log::info!("Surface element {} has no texture", j);
                                 }
                             }
                             
-                            compositor.state.terminal_surface_elements.extend(surface_elements);
+                            compositor.state.terminal_surface_elements.extend(elements);
                         }
-                        
-                        log::info!("Terminal surface processing complete: {} textures created", compositor.state.terminal_textures.len());
                     }
 
                     let scale_factor = backend.scale_factor.max(3.0);
@@ -313,13 +287,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let terminal_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
                     if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
-                        if !compositor.state.egui_state.wants_keyboard() {
-                            if let Some(surface) = terminal_surfaces.first() {
-                                let surface_clone = surface.wl_surface().clone();
-                                compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
-                            }
+                        if let Some(surface) = terminal_surfaces.first() {
+                            let surface_clone = surface.wl_surface().clone();
+                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
                         }
-                    } else if !compositor.state.show_terminal {
+                    } else {
                         compositor.keyboard.set_focus(&mut compositor.state, None, SERIAL_COUNTER.next_serial());
                     }
 
@@ -377,6 +349,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::Keyboard { event } => {
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
+                let should_handle_egui = !state.show_terminal || state.xdg_shell_state.toplevel_surfaces().is_empty();
+                let egui_state = state.egui_state.clone();
+                let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
+                
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = compositor.start_time.elapsed().as_millis() as u32;
                 compositor.keyboard.input::<(), _>(
@@ -385,8 +361,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     event.state(),
                     serial,
                     time,
-                    |_, _, _| {
-                        //
+                    move |_data, modifiers, handle| {
+                        if should_handle_egui {
+                            egui_state.handle_keyboard(&handle, key_pressed, *modifiers);
+                        }
                         FilterResult::Forward
                     },
                 );
@@ -510,31 +488,37 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 pointer.frame(&mut compositor.state);
             }
             InputEvent::PointerButton { event, .. } => {
-                let serial = SERIAL_COUNTER.next_serial();
-                let button = event.button_code();
-
-                let state = ButtonState::from(event.state());
-
                 let compositor = &mut backend.compositor;
-                let pointer = compositor.pointer.clone();
-
-                if let Some(surface) = get_surface(&compositor.state) {
-                    compositor.keyboard.set_focus(
-                        &mut compositor.state,
-                        Some(surface.wl_surface().clone()),
-                        0.into(),
-                    );
-                }
-                pointer.button(
-                    &mut compositor.state,
-                    &pointer::ButtonEvent {
-                        button,
-                        state: state.try_into().unwrap(),
-                        serial,
-                        time: event.time_msec(),
-                    },
+                
+                compositor.state.egui_state.handle_pointer_button(
+                    smithay::backend::input::MouseButton::Left, 
+                    event.state() == smithay::backend::input::ButtonState::Pressed
                 );
-                pointer.frame(&mut compositor.state);
+                
+                if !compositor.state.egui_state.wants_pointer() {
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let button = event.button_code();
+                    let state = ButtonState::from(event.state());
+                    let pointer = compositor.pointer.clone();
+
+                    if let Some(surface) = get_surface(&compositor.state) {
+                        compositor.keyboard.set_focus(
+                            &mut compositor.state,
+                            Some(surface.wl_surface().clone()),
+                            0.into(),
+                        );
+                    }
+                    pointer.button(
+                        &mut compositor.state,
+                        &pointer::ButtonEvent {
+                            button,
+                            state: state.try_into().unwrap(),
+                            serial,
+                            time: event.time_msec(),
+                        },
+                    );
+                    pointer.frame(&mut compositor.state);
+                }
             }
             InputEvent::PointerAxis { event } => {
                 let horizontal_amount = event

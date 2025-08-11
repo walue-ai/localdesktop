@@ -85,7 +85,6 @@ impl XdgShellHandler for State {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         log::info!("New toplevel surface created - terminal surface may be ready");
         surface.with_pending_state(|state| {
-            state.size.replace(self.size);
             state.states.set(xdg_toplevel::State::Activated);
         });
         surface.send_configure();
