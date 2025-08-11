@@ -89,6 +89,12 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         .xdg_shell_state
                         .toplevel_surfaces()
                         .iter()
+                        .filter(|_surface| {
+                            // Skip terminal surfaces when show_terminal is true
+                            // This prevents them from being rendered directly by the compositor (important-comment)
+                            // when they're already being displayed in EGUI
+                            !compositor.state.show_terminal
+                        })
                         .flat_map(|surface| {
                             render_elements_from_surface_tree(
                                 renderer,
