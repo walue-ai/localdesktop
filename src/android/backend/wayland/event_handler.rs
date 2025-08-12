@@ -5,7 +5,7 @@ use crate::{
         CentralizedEvent, WaylandBackend,
     },
     android::proot::process::ArchProcess,
-    core::{logging::PolarBearExpectation, config},
+    core::logging::PolarBearExpectation,
 };
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, Event, InputEvent, KeyboardKeyEvent, PointerAxisEvent,
@@ -83,27 +83,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let compositor = &mut backend.compositor;
 
-                    let mut elements: Vec<WindowRenderElement<GlowRenderer>> = if compositor.state.show_terminal {
-                        Vec::new()
-                    } else {
-                        compositor
-                            .state
-                            .xdg_shell_state
-                            .toplevel_surfaces()
-                            .iter()
-                            .flat_map(|surface| {
-                                render_elements_from_surface_tree(
-                                    renderer,
-                                    surface.wl_surface(),
-                                    (0, 0),
-                                    1.0,
-                                    1.0,
-                                    Kind::Unspecified,
-                                )
-                            })
-                            .map(WindowRenderElement::Window)
-                            .collect()
-                    };
+                    let mut elements: Vec<WindowRenderElement<GlowRenderer>> = Vec::new();
 
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.terminal_textures.clear();
@@ -188,45 +168,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
                                         if compositor.state.show_terminal && !compositor.state.terminal_spawned {
-                                            log::info!("Spawning terminal with simple command...");
-                                            
-                                            if let Ok(_) = std::process::Command::new("weston-terminal")
-                                                .env("WAYLAND_DISPLAY", config::WAYLAND_SOCKET_NAME)
-                                                .env("XDG_RUNTIME_DIR", "/tmp")
-                                                .spawn() {
-                                                log::info!("Simple terminal spawn successful");
-                                                compositor.state.terminal_spawned = true;
-                                            } else {
-                                                log::warn!("Simple terminal spawn failed, trying proot approach...");
-                                                
-                                                let check_cmd = "which weston-terminal || echo 'weston-terminal not found'";
-                                                ArchProcess::exec(check_cmd).with_log(|log_line| {
-                                                    log::info!("Terminal check: {}", log_line);
+                                            std::thread::spawn(|| {
+                                                ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal").with_log(|log_line| {
+                                                    log::info!("Terminal: {}", log_line);
                                                 });
-                                                
-                                                let terminal_commands = vec![
-                                                    format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} weston-terminal", config::WAYLAND_SOCKET_NAME),
-                                                    format!("XDG_RUNTIME_DIR=/tmp WAYLAND_DISPLAY={} xterm", config::WAYLAND_SOCKET_NAME),
-                                                ];
-                                                
-                                                for (i, cmd) in terminal_commands.iter().enumerate() {
-                                                    log::info!("Trying terminal command {}: {}", i + 1, cmd);
-                                                    let process = ArchProcess::exec(cmd);
-                                                    
-                                                    std::thread::spawn(move || {
-                                                        process.with_log(|log_line| {
-                                                            log::info!("Terminal output: {}", log_line);
-                                                        });
-                                                    });
-                                                    
-                                                    std::thread::sleep(std::time::Duration::from_millis(500));
-                                                    break;
-                                                }
-                                                
-                                                compositor.state.terminal_spawned = true;
-                                            }
-                                            
-                                            log::info!("Terminal spawn attempted, waiting for surface registration...");
+                                            });
                                         }
                                     }
                                     
@@ -293,6 +239,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
 
                     let terminal_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
+                    if compositor.state.show_terminal && !terminal_surfaces.is_empty() && !compositor.state.terminal_spawned {
+                        compositor.state.terminal_spawned = true;
+                    }
+                    
                     if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
                         if let Some(surface) = terminal_surfaces.first() {
                             let surface_clone = surface.wl_surface().clone();
