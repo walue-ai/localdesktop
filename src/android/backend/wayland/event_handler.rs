@@ -7,7 +7,6 @@ use crate::{
     android::proot::process::ArchProcess,
     core::{logging::PolarBearExpectation, config},
 };
-use std::sync::Mutex;
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, Event, InputEvent, KeyboardKeyEvent, PointerAxisEvent,
     PointerButtonEvent, TouchEvent,
@@ -26,7 +25,7 @@ use smithay::reexports::wayland_server::protocol::wl_pointer::ButtonState;
 use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
 use smithay::wayland::shell::xdg::ToplevelSurface;
 use smithay::backend::allocator::Fourcc;
-use egui::{ColorImage, TextureHandle};
+use egui::ColorImage;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 
@@ -84,23 +83,27 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let compositor = &mut backend.compositor;
 
-                    let mut elements: Vec<WindowRenderElement<GlowRenderer>> = compositor
-                        .state
-                        .xdg_shell_state
-                        .toplevel_surfaces()
-                        .iter()
-                        .flat_map(|surface| {
-                            render_elements_from_surface_tree(
-                                renderer,
-                                surface.wl_surface(),
-                                (0, 0),
-                                1.0,
-                                1.0,
-                                Kind::Unspecified,
-                            )
-                        })
-                        .map(WindowRenderElement::Window)
-                        .collect();
+                    let mut elements: Vec<WindowRenderElement<GlowRenderer>> = if compositor.state.show_terminal {
+                        Vec::new()
+                    } else {
+                        compositor
+                            .state
+                            .xdg_shell_state
+                            .toplevel_surfaces()
+                            .iter()
+                            .flat_map(|surface| {
+                                render_elements_from_surface_tree(
+                                    renderer,
+                                    surface.wl_surface(),
+                                    (0, 0),
+                                    1.0,
+                                    1.0,
+                                    Kind::Unspecified,
+                                )
+                            })
+                            .map(WindowRenderElement::Window)
+                            .collect()
+                    };
 
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.terminal_textures.clear();
@@ -157,15 +160,15 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             let mut style = (*ctx.style()).clone();
                             style.text_styles.insert(
                                 egui::TextStyle::Body,
-                                egui::FontId::new(18.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(24.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Button,
-                                egui::FontId::new(16.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(22.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Heading,
-                                egui::FontId::new(24.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(32.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             ctx.set_style(style);
                             
@@ -238,7 +241,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                             ui.label("Terminal Display:");
                                             for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
                                                 ui.label(format!("Terminal Surface {}", i + 1));
-                                                ui.image((texture_handle.id(), texture_handle.size_vec2()));
+                                                let mut size = texture_handle.size_vec2();
+                                                size.x = size.x.max(800.0);
+                                                size.y = size.y.max(600.0);
+                                                ui.image((texture_handle.id(), size));
                                             }
                                         } else if !compositor.state.terminal_surface_elements.is_empty() {
                                             ui.label("Terminal surface detected but texture conversion failed...");
@@ -274,6 +280,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     frame
                         .clear(Color32F::new(0.1, 0.0, 0.0, 1.0), &[damage])
                         .unwrap();
+                    
                     draw_render_elements(&mut frame, 1.0, &elements, &[damage]).unwrap();
 
                     let _ = frame.finish().unwrap();
