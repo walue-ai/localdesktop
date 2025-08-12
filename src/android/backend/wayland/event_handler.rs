@@ -152,60 +152,60 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             );
                             ctx.set_style(style);
                             
-                            egui::Window::new("LocalDesktop Debug")
-                                .default_pos([10.0, 10.0])
-                                .default_size([800.0 * scale_factor as f32, 1200.0 * scale_factor as f32])
-                                .resizable(true)
-                                .show(ctx, |ui| {
-                                    ui.heading("Wayland Compositor Active");
-                                    ui.label(format!("Windows: {}", compositor.state.space.elements().count()));
-                                    ui.label(format!("Scale Factor: {:.1}", scale_factor));
-                                    ui.label(format!("Screen Size: {}x{}", size.w, size.h));
-                                    ui.separator();
-                                    
-                                    if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
-                                        log::info!("Terminal button clicked!");
-                                        compositor.state.show_terminal = !compositor.state.show_terminal;
+                            egui::CentralPanel::default().show(ctx, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.style_mut().text_styles.insert(
+                                            egui::TextStyle::Button,
+                                            egui::FontId::new(16.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                        );
                                         
-                                        if compositor.state.show_terminal && !compositor.state.terminal_spawned {
-                                            std::thread::spawn(|| {
-                                                ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal").with_log(|log_line| {
-                                                    log::info!("Terminal: {}", log_line);
+                                        if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
+                                            log::info!("Terminal button clicked!");
+                                            compositor.state.show_terminal = !compositor.state.show_terminal;
+                                            
+                                            if compositor.state.show_terminal && !compositor.state.terminal_spawned {
+                                                std::thread::spawn(|| {
+                                                    ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal").with_log(|log_line| {
+                                                        log::info!("Terminal: {}", log_line);
+                                                    });
                                                 });
-                                            });
+                                                compositor.state.terminal_spawned = true;
+                                            }
                                         }
-                                    }
+                                        
+                                        if ui.button(if compositor.state.show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
+                                            log::info!("Calculator button clicked!");
+                                            compositor.state.show_calculator = !compositor.state.show_calculator;
+                                            
+                                            if compositor.state.show_calculator && !compositor.state.calculator_spawned {
+                                                std::thread::spawn(|| {
+                                                    ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp kcalc").with_log(|log_line| {
+                                                        log::info!("Calculator: {}", log_line);
+                                                    });
+                                                });
+                                                compositor.state.calculator_spawned = true;
+                                            } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
+                                                std::thread::spawn(|| {
+                                                    ArchProcess::exec("pkill kcalc").with_log(|log_line| {
+                                                        log::info!("Calculator kill: {}", log_line);
+                                                    });
+                                                });
+                                                compositor.state.calculator_spawned = false;
+                                            }
+                                        }
+                                    });
                                     
                                     if compositor.state.show_terminal {
-                                        ui.separator();
-                                        ui.heading("Terminal Display");
-                                        
-                                        let toplevel_count = compositor.state.xdg_shell_state.toplevel_surfaces().len();
-                                        ui.label(format!("Debug: {} toplevel surfaces detected", toplevel_count));
-                                        
                                         if !compositor.state.terminal_textures.is_empty() {
-                                            ui.label("Terminal Display:");
                                             for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
-                                                ui.label(format!("Terminal Surface {}", i + 1));
                                                 let mut size = texture_handle.size_vec2();
                                                 size.x = size.x.max(800.0);
                                                 size.y = size.y.max(600.0);
                                                 ui.image((texture_handle.id(), size));
                                             }
-                                        } else if !compositor.state.terminal_surface_elements.is_empty() {
-                                            ui.label("Terminal surface detected but texture conversion failed...");
-                                            for (i, element) in compositor.state.terminal_surface_elements.iter().enumerate() {
-                                                let buffer_size = element.buffer_size();
-                                                ui.label(format!("Surface {}: {}x{} (texture conversion pending)", 
-                                                    i + 1, buffer_size.w, buffer_size.h));
-                                            }
-                                        } else if compositor.state.terminal_spawned {
-                                            ui.label("Terminal is running but surface not ready...");
-                                        } else {
-                                            ui.label("Waiting for terminal to connect...");
                                         }
                                     }
-                                });
+                            });
                         },
                         Rectangle::from_size((size.w, size.h).into()),
                         scale_factor,

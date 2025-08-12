@@ -68,7 +68,7 @@ fn default_check() -> String {
 }
 
 fn default_install() -> String {
-    "stdbuf -oL pacman -Syu weston xterm --noconfirm --noprogressbar".to_string()
+    "stdbuf -oL pacman -Syu weston xterm kcalc --noconfirm --noprogressbar".to_string()
 }
 
 fn default_launch() -> String {
