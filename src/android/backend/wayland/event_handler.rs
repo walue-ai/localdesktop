@@ -87,8 +87,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.terminal_textures.clear();
+                    compositor.state.calculator_surface_elements.clear();
+                    compositor.state.calculator_textures.clear();
                     
-                    if compositor.state.show_terminal {
+                    if compositor.state.show_terminal || compositor.state.show_calculator {
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
                             let elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
@@ -116,19 +118,34 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 pixel_data,
                                             );
                                             
-                                            let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
-                                                color_image,
-                                                egui::TextureOptions::default(),
-                                            );
+                                            if compositor.state.show_terminal {
+                                                let texture_handle = compositor.state.egui_state.context().load_texture(
+                                                    format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
+                                                    color_image.clone(),
+                                                    egui::TextureOptions::default(),
+                                                );
+                                                compositor.state.terminal_textures.push(texture_handle);
+                                            }
                                             
-                                            compositor.state.terminal_textures.push(texture_handle);
+                                            if compositor.state.show_calculator {
+                                                let texture_handle = compositor.state.egui_state.context().load_texture(
+                                                    format!("calculator_surface_{}", compositor.state.calculator_textures.len()),
+                                                    color_image,
+                                                    egui::TextureOptions::default(),
+                                                );
+                                                compositor.state.calculator_textures.push(texture_handle);
+                                            }
                                         }
                                     }
                                 }
                             }
                             
-                            compositor.state.terminal_surface_elements.extend(elements);
+                            if compositor.state.show_terminal {
+                                compositor.state.terminal_surface_elements.extend(elements.iter().cloned());
+                            }
+                            if compositor.state.show_calculator {
+                                compositor.state.calculator_surface_elements.extend(elements);
+                            }
                         }
                     }
 
@@ -201,6 +218,17 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 let mut size = texture_handle.size_vec2();
                                                 size.x = size.x.max(800.0);
                                                 size.y = size.y.max(600.0);
+                                                ui.image((texture_handle.id(), size));
+                                            }
+                                        }
+                                    }
+                                    
+                                    if compositor.state.show_calculator {
+                                        if !compositor.state.calculator_textures.is_empty() {
+                                            for (i, texture_handle) in compositor.state.calculator_textures.iter().enumerate() {
+                                                let mut size = texture_handle.size_vec2();
+                                                size.x = size.x.max(400.0);
+                                                size.y = size.y.max(500.0);
                                                 ui.image((texture_handle.id(), size));
                                             }
                                         }
