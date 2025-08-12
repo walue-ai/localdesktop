@@ -87,7 +87,7 @@ impl EguiState {
     pub fn new(area: Rectangle<i32, Logical>) -> EguiState {
         let ctx = Context::default();
         
-        ctx.set_pixels_per_point(3.0); // Higher DPI for Android devices
+        ctx.set_pixels_per_point(1.5); // Reduced DPI for better button sizing
         EguiState {
             ctx,
             start_time: Instant::now(),

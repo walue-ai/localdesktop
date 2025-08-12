@@ -141,15 +141,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             }
                             
                             if compositor.state.show_terminal {
-                                compositor.state.terminal_surface_elements.extend(elements.iter().cloned());
-                            }
-                            if compositor.state.show_calculator {
+                                compositor.state.terminal_surface_elements.extend(elements);
+                            } else if compositor.state.show_calculator {
                                 compositor.state.calculator_surface_elements.extend(elements);
                             }
                         }
                     }
 
-                    let scale_factor = backend.scale_factor.max(3.0);
+                    let scale_factor = backend.scale_factor.max(1.5);
 
                     if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
                         renderer,
@@ -157,15 +156,15 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             let mut style = (*ctx.style()).clone();
                             style.text_styles.insert(
                                 egui::TextStyle::Body,
-                                egui::FontId::new(24.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(36.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Button,
-                                egui::FontId::new(22.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(12.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Heading,
-                                egui::FontId::new(32.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(48.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             ctx.set_style(style);
                             
@@ -173,20 +172,30 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     ui.horizontal(|ui| {
                                         ui.style_mut().text_styles.insert(
                                             egui::TextStyle::Button,
-                                            egui::FontId::new(16.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                            egui::FontId::new(6.0 * scale_factor as f32, egui::FontFamily::Proportional),
                                         );
                                         
                                         if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
                                             log::info!("Terminal button clicked!");
                                             compositor.state.show_terminal = !compositor.state.show_terminal;
                                             
-                                            if compositor.state.show_terminal && !compositor.state.terminal_spawned {
+                                            if compositor.state.show_terminal {
+                                                compositor.state.show_calculator = false;
+                                                if !compositor.state.terminal_spawned {
+                                                    std::thread::spawn(|| {
+                                                        ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal").with_log(|log_line| {
+                                                            log::info!("Terminal: {}", log_line);
+                                                        });
+                                                    });
+                                                    compositor.state.terminal_spawned = true;
+                                                }
+                                            } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
                                                 std::thread::spawn(|| {
-                                                    ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal").with_log(|log_line| {
-                                                        log::info!("Terminal: {}", log_line);
+                                                    ArchProcess::exec("pkill weston-terminal").with_log(|log_line| {
+                                                        log::info!("Terminal kill: {}", log_line);
                                                     });
                                                 });
-                                                compositor.state.terminal_spawned = true;
+                                                compositor.state.terminal_spawned = false;
                                             }
                                         }
                                         
@@ -194,13 +203,16 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                             log::info!("Calculator button clicked!");
                                             compositor.state.show_calculator = !compositor.state.show_calculator;
                                             
-                                            if compositor.state.show_calculator && !compositor.state.calculator_spawned {
-                                                std::thread::spawn(|| {
-                                                    ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp kcalc").with_log(|log_line| {
-                                                        log::info!("Calculator: {}", log_line);
+                                            if compositor.state.show_calculator {
+                                                compositor.state.show_terminal = false;
+                                                if !compositor.state.calculator_spawned {
+                                                    std::thread::spawn(|| {
+                                                        ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp kcalc").with_log(|log_line| {
+                                                            log::info!("Calculator: {}", log_line);
+                                                        });
                                                     });
-                                                });
-                                                compositor.state.calculator_spawned = true;
+                                                    compositor.state.calculator_spawned = true;
+                                                }
                                             } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
                                                 std::thread::spawn(|| {
                                                     ArchProcess::exec("pkill kcalc").with_log(|log_line| {
@@ -212,7 +224,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         }
                                     });
                                     
-                                    if compositor.state.show_terminal {
+                                    if compositor.state.show_terminal && !compositor.state.show_calculator {
                                         if !compositor.state.terminal_textures.is_empty() {
                                             for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
                                                 let mut size = texture_handle.size_vec2();
@@ -223,7 +235,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         }
                                     }
                                     
-                                    if compositor.state.show_calculator {
+                                    if compositor.state.show_calculator && !compositor.state.show_terminal {
                                         if !compositor.state.calculator_textures.is_empty() {
                                             for (i, texture_handle) in compositor.state.calculator_textures.iter().enumerate() {
                                                 let mut size = texture_handle.size_vec2();
