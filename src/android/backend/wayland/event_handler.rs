@@ -148,7 +148,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         }
                     }
 
-                    let scale_factor = backend.scale_factor.max(1.5);
+                    let scale_factor = backend.scale_factor.max(1.0);
 
                     if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
                         renderer,
@@ -207,7 +207,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 compositor.state.show_terminal = false;
                                                 if !compositor.state.calculator_spawned {
                                                     std::thread::spawn(|| {
-                                                        ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp kcalc").with_log(|log_line| {
+                                                        ArchProcess::exec("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR=1.0 QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI=96 QT_WAYLAND_FORCE_DPI=96 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS=1.0 GDK_SCALE=1 GDK_DPI_SCALE=1.0 FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc").with_log(|log_line| {
                                                             log::info!("Calculator: {}", log_line);
                                                         });
                                                     });
@@ -239,8 +239,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         if !compositor.state.calculator_textures.is_empty() {
                                             for (i, texture_handle) in compositor.state.calculator_textures.iter().enumerate() {
                                                 let mut size = texture_handle.size_vec2();
-                                                size.x = size.x.max(400.0);
-                                                size.y = size.y.max(500.0);
+                                                size.x = size.x.max(600.0);
+                                                size.y = size.y.max(700.0);
                                                 ui.image((texture_handle.id(), size));
                                             }
                                         }

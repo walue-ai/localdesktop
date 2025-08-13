@@ -288,13 +288,14 @@ where
                 }
             }
             wl_surface::Request::SetBufferScale { scale } => {
-                if scale >= 1 {
+                let forced_scale = if scale >= 1 { 1 } else { scale };
+                if forced_scale >= 1 {
                     PrivateSurfaceData::with_states(surface, |states| {
                         states
                             .cached_state
                             .get::<SurfaceAttributes>()
                             .pending()
-                            .buffer_scale = scale;
+                            .buffer_scale = forced_scale;
                     });
                 } else {
                     surface.post_error(wl_surface::Error::InvalidScale, "Scale must be positive");
