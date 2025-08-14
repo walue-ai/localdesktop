@@ -143,7 +143,7 @@ pub fn centralize(event: WindowEvent, backend: &mut WaylandBackend) -> Centraliz
                 .window()
                 .inner_size();
             let x = location.x / size.width as f64;
-            let y = location.y / size.width as f64;
+            let y = location.y / size.height as f64;
             let event = InputEvent::TouchDown {
                 event: WinitTouchStartedEvent {
                     time,
@@ -168,7 +168,7 @@ pub fn centralize(event: WindowEvent, backend: &mut WaylandBackend) -> Centraliz
                 .window()
                 .inner_size();
             let x = location.x / size.width as f64;
-            let y = location.y / size.width as f64;
+            let y = location.y / size.height as f64;
             let event = InputEvent::TouchMotion {
                 event: WinitTouchMovedEvent {
                     time,
@@ -194,7 +194,7 @@ pub fn centralize(event: WindowEvent, backend: &mut WaylandBackend) -> Centraliz
                 .window()
                 .inner_size();
             let x = location.x / size.width as f64;
-            let y = location.y / size.width as f64;
+            let y = location.y / size.height as f64;
             let event = InputEvent::TouchMotion {
                 event: WinitTouchMovedEvent {
                     time,

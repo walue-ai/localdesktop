@@ -85,12 +85,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let mut elements: Vec<WindowRenderElement<GlowRenderer>> = Vec::new();
 
-                    compositor.state.terminal_surface_elements.clear();
-                    compositor.state.terminal_textures.clear();
-                    compositor.state.calculator_surface_elements.clear();
-                    compositor.state.calculator_textures.clear();
-                    
-                    if compositor.state.show_terminal || compositor.state.show_calculator {
+                    if compositor.state.show_terminal && !compositor.state.terminal_texture_cache_valid {
+                        compositor.state.terminal_surface_elements.clear();
+                        compositor.state.terminal_textures.clear();
+                        
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
                             let elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
@@ -118,34 +116,67 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 pixel_data,
                                             );
                                             
-                                            if compositor.state.show_terminal {
-                                                let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                    format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
-                                                    color_image.clone(),
-                                                    egui::TextureOptions::default(),
-                                                );
-                                                compositor.state.terminal_textures.push(texture_handle);
-                                            }
-                                            
-                                            if compositor.state.show_calculator {
-                                                let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                    format!("calculator_surface_{}", compositor.state.calculator_textures.len()),
-                                                    color_image,
-                                                    egui::TextureOptions::default(),
-                                                );
-                                                compositor.state.calculator_textures.push(texture_handle);
-                                            }
+                                            let texture_handle = compositor.state.egui_state.context().load_texture(
+                                                format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
+                                                color_image,
+                                                egui::TextureOptions::default(),
+                                            );
+                                            compositor.state.terminal_textures.push(texture_handle);
                                         }
                                     }
                                 }
                             }
                             
-                            if compositor.state.show_terminal {
-                                compositor.state.terminal_surface_elements.extend(elements);
-                            } else if compositor.state.show_calculator {
-                                compositor.state.calculator_surface_elements.extend(elements);
-                            }
+                            compositor.state.terminal_surface_elements.extend(elements);
                         }
+                        compositor.state.terminal_texture_cache_valid = true;
+                    }
+                    
+                    if compositor.state.show_calculator && !compositor.state.calculator_texture_cache_valid {
+                        compositor.state.calculator_surface_elements.clear();
+                        compositor.state.calculator_textures.clear();
+                        
+                        for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                            let elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
+                                render_elements_from_surface_tree(
+                                    renderer,
+                                    surface.wl_surface(),
+                                    (0, 0),
+                                    1.0,
+                                    1.0,
+                                    Kind::Unspecified,
+                                );
+                            
+                            for element in &elements {
+                                if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
+                                    let buffer_size = element.buffer_size();
+                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
+                                    
+                                    if let Ok(mapping) = renderer.copy_texture(
+                                        texture_id,
+                                        region,
+                                        Fourcc::Abgr8888,
+                                    ) {
+                                        if let Ok(pixel_data) = renderer.map_texture(&mapping) {
+                                            let color_image = ColorImage::from_rgba_unmultiplied(
+                                                [buffer_size.w as usize, buffer_size.h as usize],
+                                                pixel_data,
+                                            );
+                                            
+                                            let texture_handle = compositor.state.egui_state.context().load_texture(
+                                                format!("calculator_surface_{}", compositor.state.calculator_textures.len()),
+                                                color_image,
+                                                egui::TextureOptions::default(),
+                                            );
+                                            compositor.state.calculator_textures.push(texture_handle);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            compositor.state.calculator_surface_elements.extend(elements);
+                        }
+                        compositor.state.calculator_texture_cache_valid = true;
                     }
 
                     let scale_factor = backend.scale_factor.max(1.0);
@@ -239,8 +270,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         if !compositor.state.calculator_textures.is_empty() {
                                             for (i, texture_handle) in compositor.state.calculator_textures.iter().enumerate() {
                                                 let mut size = texture_handle.size_vec2();
-                                                size.x = size.x.max(600.0);
-                                                size.y = size.y.max(700.0);
+                                                let available_width = ui.available_width();
+                                                let available_height = ui.available_height();
+                                                size.x = size.x.min(available_width * 0.95);
+                                                size.y = size.y.min(available_height * 0.85);
                                                 ui.image((texture_handle.id(), size));
                                             }
                                         }
@@ -284,6 +317,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
                     
                     if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
+                        if let Some(surface) = terminal_surfaces.first() {
+                            let surface_clone = surface.wl_surface().clone();
+                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
+                        }
+                    } else if compositor.state.show_calculator && !terminal_surfaces.is_empty() {
                         if let Some(surface) = terminal_surfaces.first() {
                             let surface_clone = surface.wl_surface().clone();
                             compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
@@ -346,25 +384,39 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::Keyboard { event } => {
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
-                let should_handle_egui = !state.show_terminal || state.xdg_shell_state.toplevel_surfaces().is_empty();
-                let egui_state = state.egui_state.clone();
-                let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
                 
-                let serial = SERIAL_COUNTER.next_serial();
-                let time = compositor.start_time.elapsed().as_millis() as u32;
-                compositor.keyboard.input::<(), _>(
-                    state,
-                    event.key_code(),
-                    event.state(),
-                    serial,
-                    time,
-                    move |_data, modifiers, handle| {
-                        if should_handle_egui {
-                            egui_state.handle_keyboard(&handle, key_pressed, *modifiers);
-                        }
-                        FilterResult::Forward
-                    },
-                );
+                if (state.show_terminal || state.show_calculator) && !state.xdg_shell_state.toplevel_surfaces().is_empty() {
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let time = compositor.start_time.elapsed().as_millis() as u32;
+                    compositor.keyboard.input::<(), _>(
+                        state,
+                        event.key_code(),
+                        event.state(),
+                        serial,
+                        time,
+                        |_, _, _| FilterResult::Forward,
+                    );
+                } else {
+                    let should_handle_egui = !state.show_terminal || state.xdg_shell_state.toplevel_surfaces().is_empty();
+                    let egui_state = state.egui_state.clone();
+                    let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
+                    
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let time = compositor.start_time.elapsed().as_millis() as u32;
+                    compositor.keyboard.input::<(), _>(
+                        state,
+                        event.key_code(),
+                        event.state(),
+                        serial,
+                        time,
+                        move |_data, modifiers, handle| {
+                            if should_handle_egui {
+                                egui_state.handle_keyboard(&handle, key_pressed, *modifiers);
+                            }
+                            FilterResult::Forward
+                        },
+                    );
+                }
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
@@ -376,7 +428,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     true
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() {
+                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let state = &mut compositor.state;
                     if let Some(surface) = get_surface(state) {
                         compositor.keyboard.set_focus(
@@ -408,7 +460,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     false
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() {
+                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let state = &mut compositor.state;
                     if let Some(_surface) = get_surface(state) {
                         let serial = SERIAL_COUNTER.next_serial();
@@ -431,7 +483,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let touch_location = (event.x(), event.y()).into();
                 compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
-                if !compositor.state.egui_state.wants_pointer() {
+                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let state = &mut compositor.state;
                     if let Some(surface) = get_surface(state) {
                         let time = compositor.start_time.elapsed().as_millis() as u32;
@@ -492,7 +544,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     event.state() == smithay::backend::input::ButtonState::Pressed
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() {
+                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let serial = SERIAL_COUNTER.next_serial();
                     let button = event.button_code();
                     let state = ButtonState::from(event.state());
