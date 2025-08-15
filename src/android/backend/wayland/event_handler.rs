@@ -116,8 +116,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     renderer,
                                     surface.wl_surface(),
                                     (0, 0),
-                                    1.0,
-                                    1.0,
+                                    0.6,
+                                    0.6,
                                     Kind::Unspecified,
                                 );
                             elements.extend(surface_elements.into_iter().map(WindowRenderElement::Window));
@@ -144,46 +144,49 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             );
                             ctx.set_style(style);
                             
-                            egui::CentralPanel::default().show(ctx, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.style_mut().text_styles.insert(
-                                            egui::TextStyle::Button,
-                                            egui::FontId::new(6.0 * scale_factor as f32, egui::FontFamily::Proportional),
-                                        );
-                                        
-                                        if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
-                                            log::info!("Terminal button clicked!");
-                                            compositor.state.show_terminal = !compositor.state.show_terminal;
-                                            
-                                            if compositor.state.show_terminal {
-                                                compositor.state.show_calculator = false;
-                                                if !compositor.state.terminal_spawned {
-                                                    spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal");
-                                                    compositor.state.terminal_spawned = true;
-                                                }
-                                            } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
-                                                spawn_application("pkill weston-terminal");
-                                                compositor.state.terminal_spawned = false;
-                                            }
-                                        }
-                                        
-                                        if ui.button(if compositor.state.show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
-                                            log::info!("Calculator button clicked!");
-                                            compositor.state.show_calculator = !compositor.state.show_calculator;
-                                            
-                                            if compositor.state.show_calculator {
-                                                compositor.state.show_terminal = false;
-                                                if !compositor.state.calculator_spawned {
-                                                    spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR=1.0 QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI=96 QT_WAYLAND_FORCE_DPI=96 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS=1.0 GDK_SCALE=1 GDK_DPI_SCALE=1.0 FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc");
-                                                    compositor.state.calculator_spawned = true;
-                                                }
-                                            } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
-                                                spawn_application("pkill kcalc");
-                                                compositor.state.calculator_spawned = false;
-                                            }
-                                        }
-                                    });
+                            egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.style_mut().text_styles.insert(
+                                        egui::TextStyle::Button,
+                                        egui::FontId::new(6.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                    );
                                     
+                                    if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
+                                        log::info!("Terminal button clicked!");
+                                        compositor.state.show_terminal = !compositor.state.show_terminal;
+                                        
+                                        if compositor.state.show_terminal {
+                                            compositor.state.show_calculator = false;
+                                            if !compositor.state.terminal_spawned {
+                                                spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal");
+                                                compositor.state.terminal_spawned = true;
+                                            }
+                                        } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
+                                            spawn_application("pkill weston-terminal");
+                                            compositor.state.terminal_spawned = false;
+                                        }
+                                    }
+                                    
+                                    if ui.button(if compositor.state.show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
+                                        log::info!("Calculator button clicked!");
+                                        compositor.state.show_calculator = !compositor.state.show_calculator;
+                                        
+                                        if compositor.state.show_calculator {
+                                            compositor.state.show_terminal = false;
+                                            if !compositor.state.calculator_spawned {
+                                                spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR=0.6 QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI=64 QT_WAYLAND_FORCE_DPI=64 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS=0.6 GDK_SCALE=0.6 GDK_DPI_SCALE=0.6 FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc");
+                                                compositor.state.calculator_spawned = true;
+                                            }
+                                        } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
+                                            spawn_application("pkill kcalc");
+                                            compositor.state.calculator_spawned = false;
+                                        }
+                                    }
+                                });
+                            });
+                            
+                            egui::CentralPanel::default().show(ctx, |ui| {
+                                ui.label("Applications will appear here");
                             });
                         },
                         Rectangle::from_size((size.w, size.h).into()),
