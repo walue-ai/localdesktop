@@ -29,6 +29,18 @@ use egui::ColorImage;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 
+fn calculate_dynamic_scale_factor(screen_size: smithay::utils::Size<i32, smithay::utils::Physical>, device_scale_factor: f64) -> f64 {
+    let screen_width = screen_size.w as f64;
+    let screen_height = screen_size.h as f64;
+    
+    let width_based_scale = (screen_width * 0.4) / 400.0;
+    let height_based_scale = (screen_height * 0.6) / 600.0;
+    
+    let calculated_scale = width_based_scale.min(height_based_scale);
+    
+    (calculated_scale * device_scale_factor).clamp(0.3, 1.2)
+}
+
 fn spawn_application(command: &str) {
     let cmd = command.to_string();
     std::thread::spawn(move || {
@@ -86,6 +98,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
         CentralizedEvent::Redraw => {
             if let Some(winit) = backend.graphic_renderer.as_mut() {
                 let size = winit.window_size();
+                log::info!("Screen size: {}x{}, device scale: {:.2}", size.w, size.h, backend.scale_factor);
                 let damage = Rectangle::from_size(size);
                 {
                     let (renderer, mut framebuffer) = winit.bind().unwrap();
@@ -110,14 +123,15 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
                     
                     if compositor.state.show_calculator {
+                        let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
                                     (0, 0),
-                                    0.6,
-                                    0.6,
+                                    dynamic_scale,
+                                    1.0,
                                     Kind::Unspecified,
                                 );
                             elements.extend(surface_elements.into_iter().map(WindowRenderElement::Window));
@@ -174,7 +188,15 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         if compositor.state.show_calculator {
                                             compositor.state.show_terminal = false;
                                             if !compositor.state.calculator_spawned {
-                                                spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR=0.6 QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI=64 QT_WAYLAND_FORCE_DPI=64 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS=0.6 GDK_SCALE=0.6 GDK_DPI_SCALE=0.6 FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc");
+                                                let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
+                                                let qt_scale = (dynamic_scale * 0.8).clamp(0.4, 1.0);
+                                                let font_dpi = (96.0 * qt_scale) as i32;
+                                                
+                                                let spawn_command = format!(
+                                                    "WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR={:.2} QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI={} QT_WAYLAND_FORCE_DPI={} QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS={:.2} GDK_SCALE={:.2} GDK_DPI_SCALE={:.2} FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc",
+                                                    qt_scale, font_dpi, font_dpi, qt_scale, qt_scale, qt_scale
+                                                );
+                                                spawn_application(&spawn_command);
                                                 compositor.state.calculator_spawned = true;
                                             }
                                         } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
