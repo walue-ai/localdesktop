@@ -39,8 +39,8 @@ fn calculate_dynamic_scale_factor(screen_size: smithay::utils::Size<i32, smithay
     let calc_native_width = 600.0;
     let calc_native_height = 800.0;
     
-    let width_scale = (screen_width * 0.55) / calc_native_width;
-    let height_scale = (available_height * 0.60) / calc_native_height;
+    let width_scale = (screen_width * 0.60) / calc_native_width;
+    let height_scale = available_height / calc_native_height;
     
     let calculated_scale = width_scale.min(height_scale);
     
