@@ -221,20 +221,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     if compositor.state.show_terminal && !terminal_surfaces.is_empty() && !compositor.state.terminal_spawned {
                         compositor.state.terminal_spawned = true;
                     }
-                    
-                    if compositor.state.show_terminal && !terminal_surfaces.is_empty() {
-                        if let Some(surface) = terminal_surfaces.first() {
-                            let surface_clone = surface.wl_surface().clone();
-                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
-                        }
-                    } else if compositor.state.show_calculator && !terminal_surfaces.is_empty() {
-                        if let Some(surface) = terminal_surfaces.first() {
-                            let surface_clone = surface.wl_surface().clone();
-                            compositor.keyboard.set_focus(&mut compositor.state, Some(surface_clone), SERIAL_COUNTER.next_serial());
-                        }
-                    } else {
-                        compositor.keyboard.set_focus(&mut compositor.state, None, SERIAL_COUNTER.next_serial());
-                    }
 
                     if let Some(stream) = compositor
                         .listener
@@ -291,34 +277,33 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
                 
-                let serial = SERIAL_COUNTER.next_serial();
-                let time = compositor.start_time.elapsed().as_millis() as u32;
-                
-                if (state.show_terminal || state.show_calculator) && !state.xdg_shell_state.toplevel_surfaces().is_empty() {
-                    compositor.keyboard.input::<(), _>(
-                        state,
-                        event.key_code(),
-                        event.state(),
-                        serial,
-                        time,
-                        |_, _, _| FilterResult::Forward,
-                    );
+                let terminal_surfaces = state.xdg_shell_state.toplevel_surfaces();
+                if (state.show_terminal || state.show_calculator) && !terminal_surfaces.is_empty() {
+                    if let Some(surface) = terminal_surfaces.first() {
+                        let surface_clone = surface.wl_surface().clone();
+                        compositor.keyboard.set_focus(state, Some(surface_clone), SERIAL_COUNTER.next_serial());
+                    }
                 } else {
-                    let egui_state = state.egui_state.clone();
-                    let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
-                    
-                    compositor.keyboard.input::<(), _>(
-                        state,
-                        event.key_code(),
-                        event.state(),
-                        serial,
-                        time,
-                        move |_data, modifiers, handle| {
-                            egui_state.handle_keyboard(&handle, key_pressed, *modifiers);
-                            FilterResult::Forward
-                        },
-                    );
+                    compositor.keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                 }
+                
+                let should_handle_egui = !state.show_terminal && !state.show_calculator;
+                let egui_state = state.egui_state.clone();
+                let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
+                
+                compositor.keyboard.input::<(), _>(
+                    state,
+                    event.key_code(),
+                    event.state(),
+                    SERIAL_COUNTER.next_serial(),
+                    event.time_msec(),
+                    move |_data, modifiers, handle| {
+                        if should_handle_egui {
+                            egui_state.handle_keyboard(&handle, key_pressed, *modifiers);
+                        }
+                        FilterResult::Forward
+                    },
+                );
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
@@ -333,13 +318,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let state = &mut compositor.state;
                     if let Some(surface) = get_surface(state) {
-                        compositor.keyboard.set_focus(
-                            state,
-                            Some(surface.wl_surface().clone()),
-                            0.into(),
-                        );
                         let serial = SERIAL_COUNTER.next_serial();
-                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        let time = event.time_msec();
                         
                         compositor.touch.down(
                             state,
@@ -366,7 +346,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     let state = &mut compositor.state;
                     if let Some(_surface) = get_surface(state) {
                         let serial = SERIAL_COUNTER.next_serial();
-                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        let time = event.time_msec();
                         
                         compositor.touch.up(
                             state,
@@ -388,7 +368,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
                     let state = &mut compositor.state;
                     if let Some(surface) = get_surface(state) {
-                        let time = compositor.start_time.elapsed().as_millis() as u32;
+                        let time = event.time_msec();
                         
                         compositor.touch.motion(
                             state,
@@ -451,14 +431,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     let button = event.button_code();
                     let state = ButtonState::from(event.state());
                     let pointer = compositor.pointer.clone();
-
-                    if let Some(surface) = get_surface(&compositor.state) {
-                        compositor.keyboard.set_focus(
-                            &mut compositor.state,
-                            Some(surface.wl_surface().clone()),
-                            0.into(),
-                        );
-                    }
                     pointer.button(
                         &mut compositor.state,
                         &pointer::ButtonEvent {
