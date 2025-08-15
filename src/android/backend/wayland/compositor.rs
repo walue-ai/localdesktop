@@ -69,14 +69,8 @@ pub struct State {
     pub egui_state: EguiState,
     pub show_terminal: bool,
     pub terminal_spawned: bool,
-    pub terminal_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
-    pub terminal_textures: Vec<egui::TextureHandle>,
     pub show_calculator: bool,
     pub calculator_spawned: bool,
-    pub calculator_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
-    pub calculator_textures: Vec<egui::TextureHandle>,
-    pub terminal_texture_cache_valid: bool,
-    pub calculator_texture_cache_valid: bool,
 }
 
 impl BufferHandler for State {
@@ -140,8 +134,6 @@ impl CompositorHandler for State {
 
     fn commit(&mut self, surface: &WlSurface) {
         log::info!("Surface committed - buffer ready for rendering");
-        self.terminal_texture_cache_valid = false;
-        self.calculator_texture_cache_valid = false;
         on_commit_buffer_handler::<Self>(surface);
     }
 }
@@ -243,14 +235,8 @@ impl Compositor {
             egui_state: EguiState::new(Rectangle::from_size((1920, 1080).into())),
             show_terminal: false,
             terminal_spawned: false,
-            terminal_surface_elements: Vec::new(),
-            terminal_textures: Vec::new(),
             show_calculator: false,
             calculator_spawned: false,
-            calculator_surface_elements: Vec::new(),
-            calculator_textures: Vec::new(),
-            terminal_texture_cache_valid: false,
-            calculator_texture_cache_valid: false,
         };
 
         Ok(Compositor {
