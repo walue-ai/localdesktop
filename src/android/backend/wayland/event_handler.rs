@@ -33,12 +33,18 @@ fn calculate_dynamic_scale_factor(screen_size: smithay::utils::Size<i32, smithay
     let screen_width = screen_size.w as f64;
     let screen_height = screen_size.h as f64;
     
-    let width_based_scale = (screen_width * 0.4) / 400.0;
-    let height_based_scale = (screen_height * 0.6) / 600.0;
+    let control_panel_height = 60.0 * device_scale_factor;
+    let available_height = screen_height - control_panel_height;
     
-    let calculated_scale = width_based_scale.min(height_based_scale);
+    let calc_native_width = 400.0;
+    let calc_native_height = 600.0;
     
-    (calculated_scale * device_scale_factor).clamp(0.3, 1.2)
+    let width_scale = screen_width / calc_native_width;
+    let height_scale = available_height / calc_native_height;
+    
+    let calculated_scale = width_scale.min(height_scale);
+    
+    (calculated_scale * device_scale_factor).clamp(0.3, 2.0)
 }
 
 fn spawn_application(command: &str) {
