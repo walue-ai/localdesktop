@@ -144,8 +144,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.calculator_surface_elements.clear();
                     
-                    let mut terminal_egui_textures: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
-                    let mut calculator_egui_textures: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
+                    let mut terminal_texture_elements: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
+                    let mut calculator_texture_elements: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
                     
                     if compositor.state.show_terminal {
                         log::info!("Looking for terminal surfaces...");
@@ -191,7 +191,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         Kind::Unspecified,
                                     );
                                     
-                                    terminal_egui_textures.push(texture_render_element);
+                                    terminal_texture_elements.push(texture_render_element);
                                 }
                             }
                             
@@ -244,7 +244,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         Kind::Unspecified,
                                     );
                                     
-                                    calculator_egui_textures.push(texture_render_element);
+                                    calculator_texture_elements.push(texture_render_element);
                                 }
                             }
                             
@@ -324,8 +324,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             egui::CentralPanel::default().show(ctx, |ui| {
                                 if compositor.state.show_terminal {
                                     ui.heading("Terminal");
-                                    if !terminal_egui_textures.is_empty() {
-                                        ui.label(format!("Terminal running ({} surfaces)", terminal_egui_textures.len()));
+                                    if !terminal_texture_elements.is_empty() {
+                                        ui.label(format!("Terminal running ({} surfaces)", terminal_texture_elements.len()));
                                     } else if compositor.state.terminal_spawned {
                                         ui.label("Terminal is running but surface not ready...");
                                     } else {
@@ -333,8 +333,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     }
                                 } else if compositor.state.show_calculator {
                                     ui.heading("Calculator");
-                                    if !calculator_egui_textures.is_empty() {
-                                        ui.label(format!("Calculator running ({} surfaces)", calculator_egui_textures.len()));
+                                    if !calculator_texture_elements.is_empty() {
+                                        ui.label(format!("Calculator running ({} surfaces)", calculator_texture_elements.len()));
                                     } else if compositor.state.calculator_spawned {
                                         ui.label("Calculator is running but surface not ready...");
                                     } else {
@@ -364,6 +364,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     frame
                         .clear(Color32F::new(0.1, 0.0, 0.0, 1.0), &[damage])
                         .unwrap();
+                    
+                    for texture_element in terminal_texture_elements {
+                        elements.push(WindowRenderElement::Egui(texture_element));
+                    }
+                    
+                    for texture_element in calculator_texture_elements {
+                        elements.push(WindowRenderElement::Egui(texture_element));
+                    }
                     
                     draw_render_elements(&mut frame, 1.0, &elements, &[damage]).unwrap();
 
