@@ -499,14 +499,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
                 
-                let touch_location = (event.x(), event.y()).into();
-                
-                compositor.state.egui_state.handle_pointer_motion(touch_location);
-                compositor.state.egui_state.handle_pointer_button(
-                    smithay::backend::input::MouseButton::Left, 
-                    true
-                );
-                
                 let state = &mut compositor.state;
                 if let Some(surface) = get_surface(state) {
                     compositor.keyboard.set_focus(
@@ -533,11 +525,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::TouchUp { event } => {
                 let compositor = &mut backend.compositor;
                 
-                compositor.state.egui_state.handle_pointer_button(
-                    smithay::backend::input::MouseButton::Left, 
-                    false
-                );
-                
                 let state = &mut compositor.state;
                 if let Some(_surface) = get_surface(state) {
                     let serial = SERIAL_COUNTER.next_serial();
@@ -555,10 +542,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
-                
-                let touch_location = (event.x(), event.y()).into();
-                
-                compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
                 let state = &mut compositor.state;
                 if let Some(surface) = get_surface(state) {
