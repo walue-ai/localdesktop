@@ -17,15 +17,17 @@ use smithay::backend::renderer::element::surface::{
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::glow::GlowRenderer;
 use smithay::backend::renderer::utils::draw_render_elements;
-use smithay::backend::renderer::{Color32F, Frame, Renderer, ExportMem};
+use smithay::backend::renderer::{Color32F, Frame, Renderer};
 use smithay::desktop::Space;
 use smithay::input::keyboard::FilterResult;
 use smithay::input::{pointer, touch};
 use smithay::reexports::wayland_server::protocol::wl_pointer::ButtonState;
 use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
-use smithay::wayland::shell::xdg::ToplevelSurface;
+use smithay::wayland::shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData};
+use smithay::wayland::compositor;
 use smithay::backend::allocator::Fourcc;
-use egui::{ColorImage, TextureHandle};
+use smithay::backend::renderer::ExportMem;
+use egui::ColorImage;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 
@@ -47,12 +49,36 @@ fn calculate_dynamic_scale_factor(screen_size: smithay::utils::Size<i32, smithay
     (calculated_scale * device_scale_factor * 0.4).clamp(0.1, 0.6)
 }
 
+fn get_surface_app_id(surface: &ToplevelSurface) -> Option<String> {
+    compositor::with_states(surface.wl_surface(), |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .and_then(|data| data.lock().ok())
+            .and_then(|attributes| attributes.app_id.clone())
+    })
+}
+
+fn get_surface_title(surface: &ToplevelSurface) -> Option<String> {
+    compositor::with_states(surface.wl_surface(), |states| {
+        states
+            .data_map
+            .get::<XdgToplevelSurfaceData>()
+            .and_then(|data| data.lock().ok())
+            .and_then(|attributes| attributes.title.clone())
+    })
+}
+
 fn spawn_application(command: &str) {
     let cmd = command.to_string();
     std::thread::spawn(move || {
-        ArchProcess::exec(&cmd).with_log(|log_line| {
-            log::info!("App: {}", log_line);
-        });
+        let process = ArchProcess::exec(&cmd);
+        if let Some(child) = process.process {
+            log::info!("Started application: {}", cmd);
+            std::mem::forget(child);
+        } else {
+            log::error!("Failed to spawn application: {}", cmd);
+        }
     });
 }
 
@@ -114,12 +140,27 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     let mut elements: Vec<WindowRenderElement<GlowRenderer>> = Vec::new();
 
                     compositor.state.terminal_surface_elements.clear();
-                    compositor.state.terminal_textures.clear();
                     compositor.state.calculator_surface_elements.clear();
-                    compositor.state.calculator_textures.clear();
+                    
+                    let mut terminal_egui_textures: Vec<egui::TextureHandle> = Vec::new();
+                    let mut calculator_egui_textures: Vec<egui::TextureHandle> = Vec::new();
                     
                     if compositor.state.show_terminal {
+                        log::info!("Looking for terminal surfaces...");
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                            let app_id = get_surface_app_id(surface);
+                            let title = get_surface_title(surface);
+                            log::info!("Surface found - app_id: {:?}, title: {:?}", app_id, title);
+                            
+                            let is_terminal = app_id.as_ref().map_or(false, |id| id.contains("weston-terminal") || id.contains("terminal")) ||
+                                             title.as_ref().map_or(false, |t| t.contains("Terminal"));
+                            
+                            if !is_terminal {
+                                continue;
+                            }
+                            
+                            log::info!("Processing terminal surface with app_id: {:?}, title: {:?}", app_id, title);
+                            
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
@@ -133,7 +174,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             for element in &surface_elements {
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
-                                    let region = Rectangle::from_size((buffer_size.w, buffer_size.h).into());
+                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
                                     
                                     if let Ok(mapping) = renderer.copy_texture(
                                         texture_id,
@@ -141,18 +182,18 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         Fourcc::Abgr8888,
                                     ) {
                                         if let Ok(pixel_data) = renderer.map_texture(&mapping) {
-                                            let color_image = ColorImage::from_rgba_unmultiplied(
+                                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
                                                 [buffer_size.w as usize, buffer_size.h as usize],
                                                 pixel_data,
                                             );
                                             
                                             let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                format!("terminal_surface_{}", compositor.state.terminal_textures.len()),
+                                                format!("terminal_surface_{}", terminal_egui_textures.len()),
                                                 color_image,
                                                 egui::TextureOptions::default(),
                                             );
                                             
-                                            compositor.state.terminal_textures.push(texture_handle);
+                                            terminal_egui_textures.push(texture_handle);
                                         }
                                     }
                                 }
@@ -163,8 +204,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
                     
                     if compositor.state.show_calculator {
+                        log::info!("Looking for calculator surfaces...");
                         let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
+                            let app_id = get_surface_app_id(surface);
+                            let title = get_surface_title(surface);
+                            log::info!("Surface found - app_id: {:?}, title: {:?}", app_id, title);
+                            
+                            let is_calculator = app_id.as_ref().map_or(false, |id| id.contains("kcalc") || id.contains("calculator")) ||
+                                               title.as_ref().map_or(false, |t| t.contains("Calculator") || t.contains("KCalc"));
+                            
+                            if !is_calculator {
+                                continue;
+                            }
+                            
+                            log::info!("Processing calculator surface with app_id: {:?}, title: {:?}", app_id, title);
+                            
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
@@ -178,7 +233,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             for element in &surface_elements {
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
-                                    let region = Rectangle::from_size((buffer_size.w, buffer_size.h).into());
+                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
                                     
                                     if let Ok(mapping) = renderer.copy_texture(
                                         texture_id,
@@ -186,18 +241,18 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         Fourcc::Abgr8888,
                                     ) {
                                         if let Ok(pixel_data) = renderer.map_texture(&mapping) {
-                                            let color_image = ColorImage::from_rgba_unmultiplied(
+                                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
                                                 [buffer_size.w as usize, buffer_size.h as usize],
                                                 pixel_data,
                                             );
                                             
                                             let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                format!("calculator_surface_{}", compositor.state.calculator_textures.len()),
+                                                format!("calculator_surface_{}", calculator_egui_textures.len()),
                                                 color_image,
                                                 egui::TextureOptions::default(),
                                             );
                                             
-                                            compositor.state.calculator_textures.push(texture_handle);
+                                            calculator_egui_textures.push(texture_handle);
                                         }
                                     }
                                 }
@@ -279,13 +334,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             egui::CentralPanel::default().show(ctx, |ui| {
                                 if compositor.state.show_terminal {
                                     ui.heading("Terminal");
-                                    if !compositor.state.terminal_textures.is_empty() {
-                                        for (i, texture_handle) in compositor.state.terminal_textures.iter().enumerate() {
-                                            ui.label(format!("Terminal Surface {}", i + 1));
+                                    if !terminal_egui_textures.is_empty() {
+                                        for texture_handle in &terminal_egui_textures {
                                             ui.image((texture_handle.id(), texture_handle.size_vec2()));
                                         }
-                                    } else if !compositor.state.terminal_surface_elements.is_empty() {
-                                        ui.label("Terminal surface detected but texture conversion failed...");
                                     } else if compositor.state.terminal_spawned {
                                         ui.label("Terminal is running but surface not ready...");
                                     } else {
@@ -293,13 +345,10 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     }
                                 } else if compositor.state.show_calculator {
                                     ui.heading("Calculator");
-                                    if !compositor.state.calculator_textures.is_empty() {
-                                        for (i, texture_handle) in compositor.state.calculator_textures.iter().enumerate() {
-                                            ui.label(format!("Calculator Surface {}", i + 1));
+                                    if !calculator_egui_textures.is_empty() {
+                                        for texture_handle in &calculator_egui_textures {
                                             ui.image((texture_handle.id(), texture_handle.size_vec2()));
                                         }
-                                    } else if !compositor.state.calculator_surface_elements.is_empty() {
-                                        ui.label("Calculator surface detected but texture conversion failed...");
                                     } else if compositor.state.calculator_spawned {
                                         ui.label("Calculator is running but surface not ready...");
                                     } else {
@@ -341,9 +390,30 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         );
                     }
 
-                    let terminal_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
-                    if compositor.state.show_terminal && !terminal_surfaces.is_empty() && !compositor.state.terminal_spawned {
-                        compositor.state.terminal_spawned = true;
+                    let all_surfaces = compositor.state.xdg_shell_state.toplevel_surfaces();
+                    
+                    if compositor.state.show_terminal && !compositor.state.terminal_spawned {
+                        let has_terminal_surface = all_surfaces.iter().any(|surface| {
+                            let app_id = get_surface_app_id(surface);
+                            let title = get_surface_title(surface);
+                            app_id.as_ref().map_or(false, |id| id.contains("weston-terminal") || id.contains("terminal")) ||
+                            title.as_ref().map_or(false, |t| t.contains("Terminal"))
+                        });
+                        if has_terminal_surface {
+                            compositor.state.terminal_spawned = true;
+                        }
+                    }
+                    
+                    if compositor.state.show_calculator && !compositor.state.calculator_spawned {
+                        let has_calculator_surface = all_surfaces.iter().any(|surface| {
+                            let app_id = get_surface_app_id(surface);
+                            let title = get_surface_title(surface);
+                            app_id.as_ref().map_or(false, |id| id.contains("kcalc") || id.contains("calculator")) ||
+                            title.as_ref().map_or(false, |t| t.contains("Calculator") || t.contains("KCalc"))
+                        });
+                        if has_calculator_surface {
+                            compositor.state.calculator_spawned = true;
+                        }
                     }
 
                     if let Some(stream) = compositor
@@ -401,12 +471,28 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
                 
-                let terminal_surfaces = state.xdg_shell_state.toplevel_surfaces();
-                if (state.show_terminal || state.show_calculator) && !terminal_surfaces.is_empty() {
-                    if let Some(surface) = terminal_surfaces.first() {
-                        let surface_clone = surface.wl_surface().clone();
-                        compositor.keyboard.set_focus(state, Some(surface_clone), SERIAL_COUNTER.next_serial());
-                    }
+                let all_surfaces = state.xdg_shell_state.toplevel_surfaces();
+                let mut target_surface = None;
+                
+                if state.show_terminal {
+                    target_surface = all_surfaces.iter().find(|surface| {
+                        let app_id = get_surface_app_id(surface);
+                        let title = get_surface_title(surface);
+                        app_id.as_ref().map_or(false, |id| id.contains("weston-terminal") || id.contains("terminal")) ||
+                        title.as_ref().map_or(false, |t| t.contains("Terminal"))
+                    });
+                } else if state.show_calculator {
+                    target_surface = all_surfaces.iter().find(|surface| {
+                        let app_id = get_surface_app_id(surface);
+                        let title = get_surface_title(surface);
+                        app_id.as_ref().map_or(false, |id| id.contains("kcalc") || id.contains("calculator")) ||
+                        title.as_ref().map_or(false, |t| t.contains("Calculator") || t.contains("KCalc"))
+                    });
+                }
+                
+                if let Some(surface) = target_surface {
+                    let surface_clone = surface.wl_surface().clone();
+                    compositor.keyboard.set_focus(state, Some(surface_clone), SERIAL_COUNTER.next_serial());
                 } else {
                     compositor.keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                 }
