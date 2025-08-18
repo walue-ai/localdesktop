@@ -25,9 +25,11 @@ use smithay::reexports::wayland_server::protocol::wl_pointer::ButtonState;
 use smithay::utils::{Logical, Point, Rectangle, Transform, SERIAL_COUNTER};
 use smithay::wayland::shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData};
 use smithay::wayland::compositor;
-use smithay::backend::allocator::Fourcc;
-use smithay::backend::renderer::ExportMem;
-use egui::ColorImage;
+use smithay::backend::renderer::element::{
+    texture::TextureRenderElement,
+    Id,
+};
+use smithay::backend::renderer::gles::GlesTexture;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 
@@ -142,8 +144,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.calculator_surface_elements.clear();
                     
-                    let mut terminal_egui_textures: Vec<egui::TextureHandle> = Vec::new();
-                    let mut calculator_egui_textures: Vec<egui::TextureHandle> = Vec::new();
+                    let mut terminal_egui_textures: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
+                    let mut calculator_egui_textures: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
                     
                     if compositor.state.show_terminal {
                         log::info!("Looking for terminal surfaces...");
@@ -174,28 +176,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             for element in &surface_elements {
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
-                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
                                     
-                                    if let Ok(mapping) = renderer.copy_texture(
-                                        texture_id,
-                                        region,
-                                        Fourcc::Abgr8888,
-                                    ) {
-                                        if let Ok(pixel_data) = renderer.map_texture(&mapping) {
-                                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                                [buffer_size.w as usize, buffer_size.h as usize],
-                                                pixel_data,
-                                            );
-                                            
-                                            let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                format!("terminal_surface_{}", terminal_egui_textures.len()),
-                                                color_image,
-                                                egui::TextureOptions::default(),
-                                            );
-                                            
-                                            terminal_egui_textures.push(texture_handle);
-                                        }
-                                    }
+                                    let texture_render_element = TextureRenderElement::from_static_texture(
+                                        Id::new(),
+                                        renderer.id(),
+                                        (0.0, 0.0),
+                                        texture_id.clone(),
+                                        1,
+                                        smithay::utils::Transform::Normal,
+                                        Some(1.0),
+                                        None,
+                                        Some(smithay::utils::Size::<i32, smithay::utils::Physical>::from((buffer_size.w, buffer_size.h)).to_logical(1)),
+                                        None,
+                                        Kind::Unspecified,
+                                    );
+                                    
+                                    terminal_egui_textures.push(texture_render_element);
                                 }
                             }
                             
@@ -233,28 +229,22 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             for element in &surface_elements {
                                 if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
                                     let buffer_size = element.buffer_size();
-                                    let region = smithay::utils::Rectangle::from_size(smithay::utils::Size::from((buffer_size.w, buffer_size.h)));
                                     
-                                    if let Ok(mapping) = renderer.copy_texture(
-                                        texture_id,
-                                        region,
-                                        Fourcc::Abgr8888,
-                                    ) {
-                                        if let Ok(pixel_data) = renderer.map_texture(&mapping) {
-                                            let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                                [buffer_size.w as usize, buffer_size.h as usize],
-                                                pixel_data,
-                                            );
-                                            
-                                            let texture_handle = compositor.state.egui_state.context().load_texture(
-                                                format!("calculator_surface_{}", calculator_egui_textures.len()),
-                                                color_image,
-                                                egui::TextureOptions::default(),
-                                            );
-                                            
-                                            calculator_egui_textures.push(texture_handle);
-                                        }
-                                    }
+                                    let texture_render_element = TextureRenderElement::from_static_texture(
+                                        Id::new(),
+                                        renderer.id(),
+                                        (0.0, 0.0),
+                                        texture_id.clone(),
+                                        1,
+                                        smithay::utils::Transform::Normal,
+                                        Some(1.0),
+                                        None,
+                                        Some(smithay::utils::Size::<i32, smithay::utils::Physical>::from((buffer_size.w, buffer_size.h)).to_logical(1)),
+                                        None,
+                                        Kind::Unspecified,
+                                    );
+                                    
+                                    calculator_egui_textures.push(texture_render_element);
                                 }
                             }
                             
@@ -335,9 +325,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 if compositor.state.show_terminal {
                                     ui.heading("Terminal");
                                     if !terminal_egui_textures.is_empty() {
-                                        for texture_handle in &terminal_egui_textures {
-                                            ui.image((texture_handle.id(), texture_handle.size_vec2()));
-                                        }
+                                        ui.label(format!("Terminal running ({} surfaces)", terminal_egui_textures.len()));
                                     } else if compositor.state.terminal_spawned {
                                         ui.label("Terminal is running but surface not ready...");
                                     } else {
@@ -346,9 +334,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 } else if compositor.state.show_calculator {
                                     ui.heading("Calculator");
                                     if !calculator_egui_textures.is_empty() {
-                                        for texture_handle in &calculator_egui_textures {
-                                            ui.image((texture_handle.id(), texture_handle.size_vec2()));
-                                        }
+                                        ui.label(format!("Calculator running ({} surfaces)", calculator_egui_textures.len()));
                                     } else if compositor.state.calculator_spawned {
                                         ui.label("Calculator is running but surface not ready...");
                                     } else {
