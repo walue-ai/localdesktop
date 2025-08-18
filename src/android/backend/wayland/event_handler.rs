@@ -173,11 +173,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     Kind::Unspecified,
                                 );
                             
-                            for element in &surface_elements {
-                                elements.push(WindowRenderElement::Window(element.clone()));
+                            let surface_elements_copy: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
+                                render_elements_from_surface_tree(
+                                    renderer,
+                                    surface.wl_surface(),
+                                    (0, 0),
+                                    1.0,
+                                    1.0,
+                                    Kind::Unspecified,
+                                );
+                            
+                            for element in surface_elements {
+                                elements.push(WindowRenderElement::Window(element));
                             }
                             
-                            compositor.state.terminal_surface_elements.extend(surface_elements);
+                            compositor.state.terminal_surface_elements.extend(surface_elements_copy);
                         }
                     }
                     
@@ -211,11 +221,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                     Kind::Unspecified,
                                 );
                             
-                            for element in &surface_elements {
-                                elements.push(WindowRenderElement::Window(element.clone()));
+                            let surface_elements_copy: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
+                                render_elements_from_surface_tree(
+                                    renderer,
+                                    surface.wl_surface(),
+                                    (0, 0),
+                                    dynamic_scale,
+                                    1.0,
+                                    Kind::Unspecified,
+                                );
+                            
+                            for element in surface_elements {
+                                elements.push(WindowRenderElement::Window(element));
                             }
                             
-                            compositor.state.calculator_surface_elements.extend(surface_elements);
+                            compositor.state.calculator_surface_elements.extend(surface_elements_copy);
                         }
                     }
 
