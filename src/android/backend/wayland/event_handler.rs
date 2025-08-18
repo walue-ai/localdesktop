@@ -254,6 +254,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let scale_factor = backend.scale_factor.max(1.0);
 
+                    for texture_element in terminal_texture_elements {
+                        elements.push(WindowRenderElement::Egui(texture_element));
+                    }
+                    
+                    for texture_element in calculator_texture_elements {
+                        elements.push(WindowRenderElement::Egui(texture_element));
+                    }
+
+                    let terminal_count = compositor.state.terminal_surface_elements.len();
+                    let calculator_count = compositor.state.calculator_surface_elements.len();
+                    let show_terminal = compositor.state.show_terminal;
+                    let show_calculator = compositor.state.show_calculator;
+                    let terminal_spawned = compositor.state.terminal_spawned;
+                    let calculator_spawned = compositor.state.calculator_spawned;
+
                     if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
                         renderer,
                         |ctx| {
@@ -279,7 +294,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         egui::FontId::new(6.0 * scale_factor as f32, egui::FontFamily::Proportional),
                                     );
                                     
-                                    if ui.button(if compositor.state.show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
+                                    if ui.button(if show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
                                         log::info!("Terminal button clicked!");
                                         compositor.state.show_terminal = !compositor.state.show_terminal;
                                         
@@ -295,7 +310,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                         }
                                     }
                                     
-                                    if ui.button(if compositor.state.show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
+                                    if ui.button(if show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
                                         log::info!("Calculator button clicked!");
                                         compositor.state.show_calculator = !compositor.state.show_calculator;
                                         
@@ -322,20 +337,20 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             });
                             
                             egui::CentralPanel::default().show(ctx, |ui| {
-                                if compositor.state.show_terminal {
+                                if show_terminal {
                                     ui.heading("Terminal");
-                                    if !terminal_texture_elements.is_empty() {
-                                        ui.label(format!("Terminal running ({} surfaces)", terminal_texture_elements.len()));
-                                    } else if compositor.state.terminal_spawned {
+                                    if terminal_count > 0 {
+                                        ui.label(format!("Terminal running ({} surfaces)", terminal_count));
+                                    } else if terminal_spawned {
                                         ui.label("Terminal is running but surface not ready...");
                                     } else {
                                         ui.label("Waiting for terminal to connect...");
                                     }
-                                } else if compositor.state.show_calculator {
+                                } else if show_calculator {
                                     ui.heading("Calculator");
-                                    if !calculator_texture_elements.is_empty() {
-                                        ui.label(format!("Calculator running ({} surfaces)", calculator_texture_elements.len()));
-                                    } else if compositor.state.calculator_spawned {
+                                    if calculator_count > 0 {
+                                        ui.label(format!("Calculator running ({} surfaces)", calculator_count));
+                                    } else if calculator_spawned {
                                         ui.label("Calculator is running but surface not ready...");
                                     } else {
                                         ui.label("Waiting for calculator to connect...");
@@ -350,7 +365,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         0.9,
                     ) {
                         elements.push(WindowRenderElement::Egui(egui_element));
-                        // log::info!("Egui UI rendered and added to elements with scale {}", scale_factor);
                     }
 
                     let frame_result = renderer.render(&mut framebuffer, size, Transform::Flipped180);
@@ -364,14 +378,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     frame
                         .clear(Color32F::new(0.1, 0.0, 0.0, 1.0), &[damage])
                         .unwrap();
-                    
-                    for texture_element in terminal_texture_elements {
-                        elements.push(WindowRenderElement::Egui(texture_element));
-                    }
-                    
-                    for texture_element in calculator_texture_elements {
-                        elements.push(WindowRenderElement::Egui(texture_element));
-                    }
                     
                     draw_render_elements(&mut frame, 1.0, &elements, &[damage]).unwrap();
 
@@ -491,7 +497,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                 }
                 
-                let should_handle_egui = !state.show_terminal && !state.show_calculator;
+                let wants_keyboard = state.egui_state.wants_keyboard();
+                let should_handle_egui = wants_keyboard || 
+                                       (!state.show_terminal && !state.show_calculator);
                 let egui_state = state.egui_state.clone();
                 let key_pressed = event.state() == smithay::backend::input::KeyState::Pressed;
                 
@@ -513,29 +521,34 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let compositor = &mut backend.compositor;
                 
                 let touch_location = (event.x(), event.y()).into();
+                
                 compositor.state.egui_state.handle_pointer_motion(touch_location);
                 compositor.state.egui_state.handle_pointer_button(
                     smithay::backend::input::MouseButton::Left, 
                     true
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
-                    let state = &mut compositor.state;
-                    if let Some(surface) = get_surface(state) {
-                        let serial = SERIAL_COUNTER.next_serial();
-                        let time = event.time_msec();
-                        
-                        compositor.touch.down(
-                            state,
-                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                            &touch::DownEvent {
-                                slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
-                                serial,
-                                time,
-                            },
-                        );
-                    };
+                let state = &mut compositor.state;
+                if let Some(surface) = get_surface(state) {
+                    compositor.keyboard.set_focus(
+                        state,
+                        Some(surface.wl_surface().clone()),
+                        SERIAL_COUNTER.next_serial(),
+                    );
+                    
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let time = event.time_msec();
+                    
+                    compositor.touch.down(
+                        state,
+                        Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                        &touch::DownEvent {
+                            slot: event.slot(),
+                            location: (event.x(), event.y()).into(),
+                            serial,
+                            time,
+                        },
+                    );
                 }
             }
             InputEvent::TouchUp { event } => {
@@ -546,44 +559,41 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     false
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
-                    let state = &mut compositor.state;
-                    if let Some(_surface) = get_surface(state) {
-                        let serial = SERIAL_COUNTER.next_serial();
-                        let time = event.time_msec();
-                        
-                        compositor.touch.up(
-                            state,
-                            &touch::UpEvent {
-                                slot: event.slot(),
-                                serial,
-                                time,
-                            },
-                        );
-                    };
+                let state = &mut compositor.state;
+                if let Some(_surface) = get_surface(state) {
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let time = event.time_msec();
+                    
+                    compositor.touch.up(
+                        state,
+                        &touch::UpEvent {
+                            slot: event.slot(),
+                            serial,
+                            time,
+                        },
+                    );
                 }
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
                 
                 let touch_location = (event.x(), event.y()).into();
+                
                 compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
-                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
-                    let state = &mut compositor.state;
-                    if let Some(surface) = get_surface(state) {
-                        let time = event.time_msec();
-                        
-                        compositor.touch.motion(
-                            state,
-                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                            &touch::MotionEvent {
-                                slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
-                                time,
-                            },
-                        );
-                    };
+                let state = &mut compositor.state;
+                if let Some(surface) = get_surface(state) {
+                    let time = event.time_msec();
+                    
+                    compositor.touch.motion(
+                        state,
+                        Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                        &touch::MotionEvent {
+                            slot: event.slot(),
+                            location: (event.x(), event.y()).into(),
+                            time,
+                        },
+                    );
                 }
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
@@ -630,7 +640,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     event.state() == smithay::backend::input::ButtonState::Pressed
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() || compositor.state.show_calculator {
+                if !compositor.state.egui_state.wants_pointer() {
                     let serial = SERIAL_COUNTER.next_serial();
                     let button = event.button_code();
                     let state = ButtonState::from(event.state());
