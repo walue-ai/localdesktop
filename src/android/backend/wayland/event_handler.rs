@@ -89,6 +89,32 @@ fn spawn_application(command: &str) {
  * As we currently use Xwayland, there is only 1 surface
  */
 fn get_surface(state: &State) -> Option<ToplevelSurface> {
+    if state.show_terminal {
+        for surface in state.xdg_shell_state.toplevel_surfaces() {
+            let app_id = get_surface_app_id(surface);
+            let title = get_surface_title(surface);
+            
+            let is_terminal = app_id.as_ref().map_or(false, |id| id.contains("weston-terminal") || id.contains("terminal")) ||
+                             title.as_ref().map_or(false, |t| t.contains("Terminal"));
+            
+            if is_terminal {
+                return Some(surface.clone());
+            }
+        }
+    } else if state.show_calculator {
+        for surface in state.xdg_shell_state.toplevel_surfaces() {
+            let app_id = get_surface_app_id(surface);
+            let title = get_surface_title(surface);
+            
+            let is_calculator = app_id.as_ref().map_or(false, |id| id.contains("kcalc") || id.contains("calculator")) ||
+                               title.as_ref().map_or(false, |t| t.contains("Calculator") || t.contains("KCalc"));
+            
+            if is_calculator {
+                return Some(surface.clone());
+            }
+        }
+    }
+    
     state
         .xdg_shell_state
         .toplevel_surfaces()
