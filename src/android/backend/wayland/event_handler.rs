@@ -18,7 +18,7 @@ use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::glow::GlowRenderer;
 use smithay::backend::renderer::utils::draw_render_elements;
 use smithay::backend::renderer::{Color32F, Frame, Renderer};
-use smithay::desktop::Space;
+use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::FilterResult;
 use smithay::input::{pointer, touch};
 use smithay::reexports::wayland_server::protocol::wl_pointer::ButtonState;
@@ -144,9 +144,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     compositor.state.terminal_surface_elements.clear();
                     compositor.state.calculator_surface_elements.clear();
                     
-                    let mut terminal_texture_elements: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
-                    let mut calculator_texture_elements: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
-                    
                     if compositor.state.show_terminal {
                         log::info!("Looking for terminal surfaces...");
                         for surface in compositor.state.xdg_shell_state.toplevel_surfaces() {
@@ -163,6 +160,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             
                             log::info!("Processing terminal surface with app_id: {:?}, title: {:?}", app_id, title);
                             
+                            let window = Window::new_wayland_window(surface.clone());
+                            window.override_z_index(60);
+                            
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
@@ -174,25 +174,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 );
                             
                             for element in &surface_elements {
-                                if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
-                                    let buffer_size = element.buffer_size();
-                                    
-                                    let texture_render_element = TextureRenderElement::from_static_texture(
-                                        Id::new(),
-                                        renderer.id(),
-                                        (0.0, 0.0),
-                                        texture_id.clone(),
-                                        1,
-                                        smithay::utils::Transform::Normal,
-                                        Some(1.0),
-                                        None,
-                                        Some(smithay::utils::Size::<i32, smithay::utils::Physical>::from((buffer_size.w, buffer_size.h)).to_logical(1)),
-                                        None,
-                                        Kind::Unspecified,
-                                    );
-                                    
-                                    terminal_texture_elements.push(texture_render_element);
-                                }
+                                elements.push(WindowRenderElement::Window(element.clone()));
                             }
                             
                             compositor.state.terminal_surface_elements.extend(surface_elements);
@@ -216,6 +198,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             
                             log::info!("Processing calculator surface with app_id: {:?}, title: {:?}", app_id, title);
                             
+                            let window = Window::new_wayland_window(surface.clone());
+                            window.override_z_index(60);
+                            
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
@@ -227,25 +212,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 );
                             
                             for element in &surface_elements {
-                                if let WaylandSurfaceTexture::Texture(texture_id) = element.texture() {
-                                    let buffer_size = element.buffer_size();
-                                    
-                                    let texture_render_element = TextureRenderElement::from_static_texture(
-                                        Id::new(),
-                                        renderer.id(),
-                                        (0.0, 0.0),
-                                        texture_id.clone(),
-                                        1,
-                                        smithay::utils::Transform::Normal,
-                                        Some(1.0),
-                                        None,
-                                        Some(smithay::utils::Size::<i32, smithay::utils::Physical>::from((buffer_size.w, buffer_size.h)).to_logical(1)),
-                                        None,
-                                        Kind::Unspecified,
-                                    );
-                                    
-                                    calculator_texture_elements.push(texture_render_element);
-                                }
+                                elements.push(WindowRenderElement::Window(element.clone()));
                             }
                             
                             compositor.state.calculator_surface_elements.extend(surface_elements);
@@ -253,14 +220,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
 
                     let scale_factor = backend.scale_factor.max(1.0);
-
-                    for texture_element in terminal_texture_elements {
-                        elements.push(WindowRenderElement::Egui(texture_element));
-                    }
-                    
-                    for texture_element in calculator_texture_elements {
-                        elements.push(WindowRenderElement::Egui(texture_element));
-                    }
 
                     let terminal_count = compositor.state.terminal_surface_elements.len();
                     let calculator_count = compositor.state.calculator_surface_elements.len();
