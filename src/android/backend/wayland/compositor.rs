@@ -73,6 +73,8 @@ pub struct State {
     pub show_calculator: bool,
     pub calculator_spawned: bool,
     pub calculator_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
+    pub terminal_textures: Vec<egui::TextureHandle>,
+    pub calculator_textures: Vec<egui::TextureHandle>,
 }
 
 impl BufferHandler for State {
@@ -241,6 +243,8 @@ impl Compositor {
             show_calculator: false,
             calculator_spawned: false,
             calculator_surface_elements: Vec::new(),
+            terminal_textures: Vec::new(),
+            calculator_textures: Vec::new(),
         };
 
         Ok(Compositor {
