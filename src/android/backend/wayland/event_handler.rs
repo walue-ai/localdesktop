@@ -189,11 +189,12 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             let window = Window::new_wayland_window(surface.clone());
                             window.override_z_index(60);
                             
+                            let panel_height = (50.0 * backend.scale_factor.max(1.0)) as i32;
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
-                                    (0, 0),
+                                    (0, panel_height),
                                     1.0,
                                     1.0,
                                     Kind::Unspecified,
@@ -203,7 +204,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
-                                    (0, 0),
+                                    (0, panel_height),
                                     1.0,
                                     1.0,
                                     Kind::Unspecified,
@@ -237,11 +238,12 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             let window = Window::new_wayland_window(surface.clone());
                             window.override_z_index(60);
                             
+                            let panel_height = (50.0 * backend.scale_factor.max(1.0)) as i32;
                             let surface_elements: Vec<WaylandSurfaceRenderElement<GlowRenderer>> = 
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
-                                    (0, 0),
+                                    (0, panel_height),
                                     dynamic_scale,
                                     1.0,
                                     Kind::Unspecified,
@@ -251,7 +253,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 render_elements_from_surface_tree(
                                     renderer,
                                     surface.wl_surface(),
-                                    (0, 0),
+                                    (0, panel_height),
                                     dynamic_scale,
                                     1.0,
                                     Kind::Unspecified,
@@ -267,12 +269,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
 
                     let scale_factor = backend.scale_factor.max(1.0);
 
-                    let terminal_count = compositor.state.terminal_surface_elements.len();
-                    let calculator_count = compositor.state.calculator_surface_elements.len();
-                    let show_terminal = compositor.state.show_terminal;
-                    let show_calculator = compositor.state.show_calculator;
-                    let terminal_spawned = compositor.state.terminal_spawned;
-                    let calculator_spawned = compositor.state.calculator_spawned;
 
                     if let Ok(Some(egui_element)) = compositor.state.egui_state.render(
                         renderer,
@@ -280,11 +276,11 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             let mut style = (*ctx.style()).clone();
                             style.text_styles.insert(
                                 egui::TextStyle::Body,
-                                egui::FontId::new(36.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(48.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Button,
-                                egui::FontId::new(12.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                egui::FontId::new(18.0 * scale_factor as f32, egui::FontFamily::Proportional),
                             );
                             style.text_styles.insert(
                                 egui::TextStyle::Heading,
@@ -292,78 +288,58 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             );
                             ctx.set_style(style);
                             
-                            egui::TopBottomPanel::top("control_panel").show(ctx, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.style_mut().text_styles.insert(
-                                        egui::TextStyle::Button,
-                                        egui::FontId::new(6.0 * scale_factor as f32, egui::FontFamily::Proportional),
-                                    );
-                                    
-                                    if ui.button(if show_terminal { "Hide Terminal" } else { "Show Terminal" }).clicked() {
-                                        log::info!("Terminal button clicked!");
-                                        compositor.state.show_terminal = !compositor.state.show_terminal;
+                            egui::TopBottomPanel::top("control_panel")
+                                .exact_height(50.0 * scale_factor as f32)
+                                .show(ctx, |ui| {
+                                    ui.horizontal_centered(|ui| {
+                                        ui.style_mut().text_styles.insert(
+                                            egui::TextStyle::Button,
+                                            egui::FontId::new(14.0 * scale_factor as f32, egui::FontFamily::Proportional),
+                                        );
                                         
-                                        if compositor.state.show_terminal {
-                                            compositor.state.show_calculator = false;
-                                            if !compositor.state.terminal_spawned {
-                                                spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal");
-                                                compositor.state.terminal_spawned = true;
+                                        if ui.add_sized([80.0 * scale_factor as f32, 60.0 * scale_factor as f32], egui::Button::new("term")).clicked() {
+                                            log::info!("Terminal button clicked!");
+                                            compositor.state.show_terminal = !compositor.state.show_terminal;
+                                            
+                                            if compositor.state.show_terminal {
+                                                compositor.state.show_calculator = false;
+                                                if !compositor.state.terminal_spawned {
+                                                    spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal");
+                                                    compositor.state.terminal_spawned = true;
+                                                }
+                                            } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
+                                                spawn_application("pkill weston-terminal");
+                                                compositor.state.terminal_spawned = false;
                                             }
-                                        } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
-                                            spawn_application("pkill weston-terminal");
-                                            compositor.state.terminal_spawned = false;
                                         }
-                                    }
-                                    
-                                    if ui.button(if show_calculator { "Hide Calculator" } else { "Show Calculator" }).clicked() {
-                                        log::info!("Calculator button clicked!");
-                                        compositor.state.show_calculator = !compositor.state.show_calculator;
                                         
-                                        if compositor.state.show_calculator {
-                                            compositor.state.show_terminal = false;
-                                            if !compositor.state.calculator_spawned {
-                                                let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
-                                                let qt_scale = (dynamic_scale * 0.8).clamp(0.4, 1.0);
-                                                let font_dpi = (96.0 * qt_scale) as i32;
-                                                
-                                                let spawn_command = format!(
-                                                    "WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR={:.2} QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI={} QT_WAYLAND_FORCE_DPI={} QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS={:.2} GDK_SCALE={:.2} GDK_DPI_SCALE={:.2} FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc",
-                                                    qt_scale, font_dpi, font_dpi, qt_scale, qt_scale, qt_scale
-                                                );
-                                                spawn_application(&spawn_command);
-                                                compositor.state.calculator_spawned = true;
+                                        ui.separator();
+                                        
+                                        if ui.add_sized([80.0 * scale_factor as f32, 60.0 * scale_factor as f32], egui::Button::new("calc")).clicked() {
+                                            log::info!("Calculator button clicked!");
+                                            compositor.state.show_calculator = !compositor.state.show_calculator;
+                                            
+                                            if compositor.state.show_calculator {
+                                                compositor.state.show_terminal = false;
+                                                if !compositor.state.calculator_spawned {
+                                                    let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
+                                                    let qt_scale = (dynamic_scale * 0.8).clamp(0.4, 1.0);
+                                                    let font_dpi = (96.0 * qt_scale) as i32;
+                                                    
+                                                    let spawn_command = format!(
+                                                        "WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR={:.2} QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI={} QT_WAYLAND_FORCE_DPI={} QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS={:.2} GDK_SCALE={:.2} GDK_DPI_SCALE={:.2} FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc",
+                                                        qt_scale, font_dpi, font_dpi, qt_scale, qt_scale, qt_scale
+                                                    );
+                                                    spawn_application(&spawn_command);
+                                                    compositor.state.calculator_spawned = true;
+                                                }
+                                            } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
+                                                spawn_application("pkill kcalc");
+                                                compositor.state.calculator_spawned = false;
                                             }
-                                        } else if !compositor.state.show_calculator && compositor.state.calculator_spawned {
-                                            spawn_application("pkill kcalc");
-                                            compositor.state.calculator_spawned = false;
                                         }
-                                    }
+                                    });
                                 });
-                            });
-                            
-                            egui::CentralPanel::default().show(ctx, |ui| {
-                                if show_terminal {
-                                    ui.heading("Terminal");
-                                    if terminal_count > 0 {
-                                        ui.label(format!("Terminal running ({} surfaces)", terminal_count));
-                                    } else if terminal_spawned {
-                                        ui.label("Terminal is running but surface not ready...");
-                                    } else {
-                                        ui.label("Waiting for terminal to connect...");
-                                    }
-                                } else if show_calculator {
-                                    ui.heading("Calculator");
-                                    if calculator_count > 0 {
-                                        ui.label(format!("Calculator running ({} surfaces)", calculator_count));
-                                    } else if calculator_spawned {
-                                        ui.label("Calculator is running but surface not ready...");
-                                    } else {
-                                        ui.label("Waiting for calculator to connect...");
-                                    }
-                                } else {
-                                    ui.label("Applications will appear here");
-                                }
-                            });
                         },
                         Rectangle::from_size((size.w, size.h).into()),
                         scale_factor,
@@ -524,26 +500,26 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
-                let state = &mut compositor.state;
+                let location = Point::from((event.x(), event.y()));
                 
-                if !state.show_terminal && !state.show_calculator {
-                    let location = Point::from((event.x(), event.y()));
-                    compositor.state.egui_state.handle_pointer_motion(location);
-                    compositor.state.egui_state.handle_pointer_button(
-                        smithay::backend::input::MouseButton::Left, 
-                        true
-                    );
-                } else {
-                    if let Some(surface) = get_surface(state) {
+                compositor.state.egui_state.handle_pointer_motion(location);
+                compositor.state.egui_state.handle_pointer_button(
+                    smithay::backend::input::MouseButton::Left, 
+                    true
+                );
+                
+                let wants_pointer = compositor.state.egui_state.wants_pointer();
+                if !wants_pointer {
+                    if let Some(surface) = get_surface(&compositor.state) {
                         compositor.keyboard.set_focus(
-                            state,
+                            &mut compositor.state,
                             Some(surface.wl_surface().clone()),
                             SERIAL_COUNTER.next_serial(),
                         );
                         let serial = SERIAL_COUNTER.next_serial();
                         let time = event.time_msec();
                         compositor.touch.down(
-                            state,
+                            &mut compositor.state,
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::DownEvent {
                                 slot: event.slot(),
@@ -557,40 +533,38 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchUp { event } => {
                 let compositor = &mut backend.compositor;
-                let state = &mut compositor.state;
                 
-                if !state.show_terminal && !state.show_calculator {
-                    compositor.state.egui_state.handle_pointer_button(
-                        smithay::backend::input::MouseButton::Left, 
-                        false
+                compositor.state.egui_state.handle_pointer_button(
+                    smithay::backend::input::MouseButton::Left, 
+                    false
+                );
+                
+                let wants_pointer = compositor.state.egui_state.wants_pointer();
+                if !wants_pointer {
+                    let serial = SERIAL_COUNTER.next_serial();
+                    let time = event.time_msec();
+                    compositor.touch.up(
+                        &mut compositor.state,
+                        &touch::UpEvent {
+                            slot: event.slot(),
+                            serial,
+                            time,
+                        },
                     );
-                } else {
-                    if let Some(_surface) = get_surface(state) {
-                        let serial = SERIAL_COUNTER.next_serial();
-                        let time = event.time_msec();
-                        compositor.touch.up(
-                            state,
-                            &touch::UpEvent {
-                                slot: event.slot(),
-                                serial,
-                                time,
-                            },
-                        );
-                    }
                 }
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
-                let state = &mut compositor.state;
+                let location = Point::from((event.x(), event.y()));
                 
-                if !state.show_terminal && !state.show_calculator {
-                    let location = Point::from((event.x(), event.y()));
-                    compositor.state.egui_state.handle_pointer_motion(location);
-                } else {
-                    if let Some(surface) = get_surface(state) {
+                compositor.state.egui_state.handle_pointer_motion(location);
+                
+                let wants_pointer = compositor.state.egui_state.wants_pointer();
+                if !wants_pointer {
+                    if let Some(surface) = get_surface(&compositor.state) {
                         let time = event.time_msec();
                         compositor.touch.motion(
-                            state,
+                            &mut compositor.state,
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::MotionEvent {
                                 slot: event.slot(),
@@ -603,7 +577,6 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let compositor = &mut backend.compositor;
-                let pointer = compositor.pointer.clone();
                 let space = &compositor.state.space;
                 let serial = SERIAL_COUNTER.next_serial();
 
@@ -621,40 +594,63 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let mut pointer_location =
                     (event.x_transformed(max_x), event.y_transformed(max_y)).into();
 
-                // clamp to screen limits
                 pointer_location = clamp_coords(space, pointer_location);
-
-                if let Some(surface) = get_surface(&compositor.state) {
-                    pointer.motion(
-                        &mut compositor.state,
-                        Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                        &pointer::MotionEvent {
-                            location: pointer_location,
-                            serial,
-                            time: event.time_msec(),
-                        },
-                    );
+                
+                compositor.state.egui_state.handle_pointer_motion(pointer_location);
+                
+                let wants_pointer = compositor.state.egui_state.wants_pointer();
+                if !wants_pointer {
+                    let pointer = compositor.pointer.clone();
+                    if let Some(surface) = get_surface(&compositor.state) {
+                        pointer.motion(
+                            &mut compositor.state,
+                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                            &pointer::MotionEvent {
+                                location: pointer_location,
+                                serial,
+                                time: event.time_msec(),
+                            },
+                        );
+                    }
+                    pointer.frame(&mut compositor.state);
                 }
-                pointer.frame(&mut compositor.state);
             }
             InputEvent::PointerButton { event, .. } => {
                 let compositor = &mut backend.compositor;
+                let button = event.button_code();
+                let button_state = ButtonState::from(event.state());
+                
+                let mouse_button = match button {
+                    0x110 => smithay::backend::input::MouseButton::Left,
+                    0x111 => smithay::backend::input::MouseButton::Right,
+                    0x112 => smithay::backend::input::MouseButton::Middle,
+                    0x115 => smithay::backend::input::MouseButton::Forward,
+                    0x116 => smithay::backend::input::MouseButton::Back,
+                    _ => smithay::backend::input::MouseButton::Left,
+                };
                 
                 compositor.state.egui_state.handle_pointer_button(
-                    smithay::backend::input::MouseButton::Left, 
+                    mouse_button, 
                     event.state() == smithay::backend::input::ButtonState::Pressed
                 );
                 
-                if !compositor.state.egui_state.wants_pointer() {
+                let wants_pointer = compositor.state.egui_state.wants_pointer();
+                if !wants_pointer {
                     let serial = SERIAL_COUNTER.next_serial();
-                    let button = event.button_code();
-                    let state = ButtonState::from(event.state());
                     let pointer = compositor.pointer.clone();
+                    
+                    if let Some(surface) = get_surface(&compositor.state) {
+                        compositor.keyboard.set_focus(
+                            &mut compositor.state,
+                            Some(surface.wl_surface().clone()),
+                            SERIAL_COUNTER.next_serial(),
+                        );
+                    }
                     pointer.button(
                         &mut compositor.state,
                         &pointer::ButtonEvent {
                             button,
-                            state: state.try_into().unwrap(),
+                            state: button_state.try_into().unwrap(),
                             serial,
                             time: event.time_msec(),
                         },
