@@ -506,7 +506,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    let output = state.space.outputs().next();
+                    let output = state.space.outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
                     if let Some(output) = output {
                         let output_geometry = state.space.output_geometry(output).unwrap();
                         let transform = output.current_transform();
@@ -525,7 +527,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
                 } else {
                     if let Some(surface) = get_surface(state) {
-                        let output = state.space.outputs().next();
+                        let output = state.space.outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
                         if let Some(output) = output {
                             let output_geometry = state.space.output_geometry(output).unwrap();
                             let transform = output.current_transform();
@@ -594,7 +598,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    let output = state.space.outputs().next();
+                    let output = state.space.outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
                     if let Some(output) = output {
                         let output_geometry = state.space.output_geometry(output).unwrap();
                         let transform = output.current_transform();
@@ -609,7 +615,9 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     }
                 } else {
                     if let Some(surface) = get_surface(state) {
-                        let output = state.space.outputs().next();
+                        let output = state.space.outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
                         if let Some(output) = output {
                             let output_geometry = state.space.output_geometry(output).unwrap();
                             let transform = output.current_transform();
