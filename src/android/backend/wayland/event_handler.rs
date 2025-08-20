@@ -506,59 +506,32 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    let output = state.space.outputs()
-                        .find(|output| output.name().starts_with("eDP"))
-                        .or_else(|| state.space.outputs().next());
-                    if let Some(output) = output {
-                        let output_geometry = state.space.output_geometry(output).unwrap();
-                        let transform = output.current_transform();
-                        let size = transform.invert().transform_size(output_geometry.size);
-                        let touch_location = transform.transform_point_in(
-                            event.position_transformed(size), 
-                            &size.to_f64()
-                        ) + output_geometry.loc.to_f64();
-                        let touch_location = clamp_coords(&state.space, touch_location);
-                        
-                        state.egui_state.handle_pointer_motion(touch_location);
-                        state.egui_state.handle_pointer_button(
-                            smithay::backend::input::MouseButton::Left, 
-                            true
-                        );
-                    }
+                    let touch_location = Point::from((event.x(), event.y()));
+                    state.egui_state.handle_pointer_motion(touch_location);
+                    state.egui_state.handle_pointer_button(
+                        smithay::backend::input::MouseButton::Left, 
+                        true
+                    );
                 } else {
                     if let Some(surface) = get_surface(state) {
-                        let output = state.space.outputs()
-                        .find(|output| output.name().starts_with("eDP"))
-                        .or_else(|| state.space.outputs().next());
-                        if let Some(output) = output {
-                            let output_geometry = state.space.output_geometry(output).unwrap();
-                            let transform = output.current_transform();
-                            let size = transform.invert().transform_size(output_geometry.size);
-                            let touch_location = transform.transform_point_in(
-                                event.position_transformed(size), 
-                                &size.to_f64()
-                            ) + output_geometry.loc.to_f64();
-                            let touch_location = clamp_coords(&state.space, touch_location);
-                            
-                            compositor.keyboard.set_focus(
-                                state,
-                                Some(surface.wl_surface().clone()),
-                                SERIAL_COUNTER.next_serial(),
-                            );
-                            let serial = SERIAL_COUNTER.next_serial();
-                            let time = event.time_msec();
-                            compositor.touch.down(
-                                state,
-                                Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                                &touch::DownEvent {
-                                    slot: event.slot(),
-                                    location: touch_location,
-                                    serial,
-                                    time,
-                                },
-                            );
-                            compositor.touch.frame(state);
-                        }
+                        compositor.keyboard.set_focus(
+                            state,
+                            Some(surface.wl_surface().clone()),
+                            SERIAL_COUNTER.next_serial(),
+                        );
+                        let serial = SERIAL_COUNTER.next_serial();
+                        let time = event.time_msec();
+                        compositor.touch.down(
+                            state,
+                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                            &touch::DownEvent {
+                                slot: event.slot(),
+                                location: (event.x(), event.y()).into(),
+                                serial,
+                                time,
+                            },
+                        );
+                        compositor.touch.frame(state);
                     }
                 }
             }
@@ -598,48 +571,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    let output = state.space.outputs()
-                        .find(|output| output.name().starts_with("eDP"))
-                        .or_else(|| state.space.outputs().next());
-                    if let Some(output) = output {
-                        let output_geometry = state.space.output_geometry(output).unwrap();
-                        let transform = output.current_transform();
-                        let size = transform.invert().transform_size(output_geometry.size);
-                        let touch_location = transform.transform_point_in(
-                            event.position_transformed(size), 
-                            &size.to_f64()
-                        ) + output_geometry.loc.to_f64();
-                        let touch_location = clamp_coords(&state.space, touch_location);
-                        
-                        state.egui_state.handle_pointer_motion(touch_location);
-                    }
+                    let touch_location = Point::from((event.x(), event.y()));
+                    state.egui_state.handle_pointer_motion(touch_location);
                 } else {
                     if let Some(surface) = get_surface(state) {
-                        let output = state.space.outputs()
-                        .find(|output| output.name().starts_with("eDP"))
-                        .or_else(|| state.space.outputs().next());
-                        if let Some(output) = output {
-                            let output_geometry = state.space.output_geometry(output).unwrap();
-                            let transform = output.current_transform();
-                            let size = transform.invert().transform_size(output_geometry.size);
-                            let touch_location = transform.transform_point_in(
-                                event.position_transformed(size), 
-                                &size.to_f64()
-                            ) + output_geometry.loc.to_f64();
-                            let touch_location = clamp_coords(&state.space, touch_location);
-                            
-                            let time = event.time_msec();
-                            compositor.touch.motion(
-                                state,
-                                Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
-                                &touch::MotionEvent {
-                                    slot: event.slot(),
-                                    location: touch_location,
-                                    time,
-                                },
-                            );
-                            compositor.touch.frame(state);
-                        }
+                        let time = event.time_msec();
+                        compositor.touch.motion(
+                            state,
+                            Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
+                            &touch::MotionEvent {
+                                slot: event.slot(),
+                                location: (event.x(), event.y()).into(),
+                                time,
+                            },
+                        );
+                        compositor.touch.frame(state);
                     }
                 }
             }
