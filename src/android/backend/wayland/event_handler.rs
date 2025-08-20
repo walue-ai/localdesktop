@@ -503,13 +503,15 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                 let location = Point::from((event.x(), event.y()));
                 
                 compositor.state.egui_state.handle_pointer_motion(location);
-                compositor.state.egui_state.handle_pointer_button(
-                    smithay::backend::input::MouseButton::Left, 
-                    true
-                );
                 
                 let wants_pointer = compositor.state.egui_state.wants_pointer();
-                if !wants_pointer {
+                
+                if wants_pointer {
+                    compositor.state.egui_state.handle_pointer_button(
+                        smithay::backend::input::MouseButton::Left, 
+                        true
+                    );
+                } else {
                     if let Some(surface) = get_surface(&compositor.state) {
                         compositor.keyboard.set_focus(
                             &mut compositor.state,
@@ -534,13 +536,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::TouchUp { event } => {
                 let compositor = &mut backend.compositor;
                 
-                compositor.state.egui_state.handle_pointer_button(
-                    smithay::backend::input::MouseButton::Left, 
-                    false
-                );
-                
                 let wants_pointer = compositor.state.egui_state.wants_pointer();
-                if !wants_pointer {
+                
+                if wants_pointer {
+                    compositor.state.egui_state.handle_pointer_button(
+                        smithay::backend::input::MouseButton::Left, 
+                        false
+                    );
+                } else {
                     let serial = SERIAL_COUNTER.next_serial();
                     let time = event.time_msec();
                     compositor.touch.up(
@@ -629,13 +632,14 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     _ => smithay::backend::input::MouseButton::Left,
                 };
                 
-                compositor.state.egui_state.handle_pointer_button(
-                    mouse_button, 
-                    event.state() == smithay::backend::input::ButtonState::Pressed
-                );
-                
                 let wants_pointer = compositor.state.egui_state.wants_pointer();
-                if !wants_pointer {
+                
+                if wants_pointer {
+                    compositor.state.egui_state.handle_pointer_button(
+                        mouse_button, 
+                        event.state() == smithay::backend::input::ButtonState::Pressed
+                    );
+                } else {
                     let serial = SERIAL_COUNTER.next_serial();
                     let pointer = compositor.pointer.clone();
                     
