@@ -547,6 +547,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 time,
                             },
                         );
+                        compositor.touch.frame(state);
                     }
                 }
             }
@@ -573,6 +574,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 time,
                             },
                         );
+                        compositor.touch.frame(state);
                     }
                 }
             }
@@ -613,6 +615,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 time,
                             },
                         );
+                        compositor.touch.frame(state);
                     }
                 }
             }
