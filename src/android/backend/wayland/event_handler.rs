@@ -501,19 +501,44 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
-                let location = Point::from((event.x(), event.y()));
                 
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    state.egui_state.handle_pointer_motion(location);
+                    let space = &state.space;
+                    let max_x = space
+                        .outputs()
+                        .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                    let max_h_output = space
+                        .outputs()
+                        .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                        .unwrap();
+                    let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                    
+                    let mut touch_location = (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                    touch_location = clamp_coords(space, touch_location);
+                    
+                    state.egui_state.handle_pointer_motion(touch_location);
                     state.egui_state.handle_pointer_button(
                         smithay::backend::input::MouseButton::Left, 
                         true
                     );
                 } else {
                     if let Some(surface) = get_surface(state) {
+                        let space = &state.space;
+                        let max_x = space
+                            .outputs()
+                            .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                        let max_h_output = space
+                            .outputs()
+                            .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                            .unwrap();
+                        let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                        
+                        let mut touch_location = (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                        touch_location = clamp_coords(space, touch_location);
+                        
                         compositor.keyboard.set_focus(
                             state,
                             Some(surface.wl_surface().clone()),
@@ -526,7 +551,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::DownEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: touch_location,
                                 serial,
                                 time,
                             },
@@ -566,22 +591,47 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
                 let state = &mut compositor.state;
-                let location = Point::from((event.x(), event.y()));
                 
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
                 if should_handle_egui {
-                    state.egui_state.handle_pointer_motion(location);
+                    let space = &state.space;
+                    let max_x = space
+                        .outputs()
+                        .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                    let max_h_output = space
+                        .outputs()
+                        .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                        .unwrap();
+                    let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                    
+                    let mut touch_location = (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                    touch_location = clamp_coords(space, touch_location);
+                    
+                    state.egui_state.handle_pointer_motion(touch_location);
                 } else {
                     if let Some(surface) = get_surface(state) {
+                        let space = &state.space;
+                        let max_x = space
+                            .outputs()
+                            .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                        let max_h_output = space
+                            .outputs()
+                            .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                            .unwrap();
+                        let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                        
+                        let mut touch_location = (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                        touch_location = clamp_coords(space, touch_location);
+                        
                         let time = event.time_msec();
                         compositor.touch.motion(
                             state,
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::MotionEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: touch_location,
                                 time,
                             },
                         );
