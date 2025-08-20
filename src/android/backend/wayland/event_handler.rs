@@ -500,9 +500,25 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
-                let location = Point::from((event.x(), event.y()));
+                let space = &compositor.state.space;
                 
-                compositor.state.egui_state.handle_pointer_motion(location);
+                let max_x = space
+                    .outputs()
+                    .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                
+                let max_h_output = space
+                    .outputs()
+                    .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                    .unwrap();
+                
+                let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                
+                let mut touch_location = 
+                    (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                
+                touch_location = clamp_coords(space, touch_location);
+                
+                compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
                 let wants_pointer = compositor.state.egui_state.wants_pointer();
                 
@@ -526,7 +542,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::DownEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: touch_location,
                                 serial,
                                 time,
                             },
@@ -564,9 +580,25 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
-                let location = Point::from((event.x(), event.y()));
+                let space = &compositor.state.space;
                 
-                compositor.state.egui_state.handle_pointer_motion(location);
+                let max_x = space
+                    .outputs()
+                    .fold(0, |acc, o| acc + space.output_geometry(o).unwrap().size.w);
+                
+                let max_h_output = space
+                    .outputs()
+                    .max_by_key(|o| space.output_geometry(o).unwrap().size.h)
+                    .unwrap();
+                
+                let max_y = space.output_geometry(max_h_output).unwrap().size.h;
+                
+                let mut touch_location = 
+                    (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+                
+                touch_location = clamp_coords(space, touch_location);
+                
+                compositor.state.egui_state.handle_pointer_motion(touch_location);
                 
                 let wants_pointer = compositor.state.egui_state.wants_pointer();
                 
@@ -579,7 +611,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::MotionEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: touch_location,
                                 time,
                             },
                         );
