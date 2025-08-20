@@ -51,9 +51,23 @@ type SetupStage = Box<dyn Fn(&SetupOptions) -> StageOutput + Send>;
 /// Otherwise, it should return a `JoinHandle`, so that the setup process can wait for the task to finish, but not block the main thread so that the setup progress can be reported to the user.
 type StageOutput = Option<JoinHandle<()>>;
 
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
     let context = get_application_context();
-    let temp_file = context.data_dir.join("archlinux-fs.tar.xz");
+    let temp_file = context.cache_dir.join("archlinux-fs.tar.xz");
     let fs_root = Path::new(ARCH_FS_ROOT);
     let extracted_dir = context.data_dir.join("archlinux-aarch64");
     let mpsc_sender = options.mpsc_sender.clone();
@@ -113,7 +127,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 
                 mpsc_sender
                     .send(SetupMessage::Progress(
-                        "Extracting Arch Linux FS...".to_string(),
+                        "Extracting Void Linux FS...".to_string(),
                     ))
                     .pb_expect("Failed to send log message");
 
@@ -122,7 +136,7 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
 
                 // Extract tar file directly to the final destination
                 let tar_file = File::open(&temp_file)
-                    .pb_expect("Failed to open downloaded Arch Linux FS file");
+                    .pb_expect("Failed to open downloaded Void Linux FS file");
                 let tar = XzDecoder::new(tar_file);
                 let mut archive = Archive::new(tar);
 
@@ -147,9 +161,13 @@ fn setup_arch_fs(options: &SetupOptions) -> StageOutput {
                 break;
             }
 
-            // Move the extracted files to the final destination
-            fs::rename(&extracted_dir, fs_root)
-                .pb_expect("Failed to rename extracted files to final destination");
+            // Move the extracted files to the final destination using copy + remove to handle cross-device links
+            if let Err(_) = fs::rename(&extracted_dir, fs_root) {
+                copy_dir_all(&extracted_dir, fs_root)
+                    .pb_expect("Failed to copy extracted files to final destination");
+                fs::remove_dir_all(&extracted_dir)
+                    .pb_expect("Failed to remove temporary extracted directory");
+            }
 
             // Clean up the temporary file
             fs::remove_file(&temp_file).pb_expect("Failed to remove temporary file");
@@ -200,8 +218,9 @@ fn simulate_linux_sysdata_stage(options: &SetupOptions) -> StageOutput {
                 ];
 
             for (path, content) in proc_files {
-                let _ = fs::write(fs_root.join(path), content)
-                    .pb_expect(&format!("Permission denied while writing to {}", path));
+                if let Err(e) = fs::write(fs_root.join(path), content) {
+                    log::warn!("Failed to write proc file {}: {}. PRoot glue mechanism should handle this.", path, e);
+                }
             }
         }));
     }

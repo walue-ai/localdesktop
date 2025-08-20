@@ -4,6 +4,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use log;
 
 pub type Log = Box<dyn Fn(String)>;
 
@@ -24,60 +25,37 @@ impl ArchProcess {
         #[cfg(test)]
         let proot_loader = "/data/local/tmp/libproot_loader.so";
 
-        let mut process = Command::new(context.native_library_dir.join("libproot.so"));
+        let mut process = Command::new(context.native_library_dir.join("libproot-userland.so"));
         process
             .env("PROOT_LOADER", proot_loader)
-            .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
+            .env("PROOT_TMP_DIR", "/data/local/tmp")
+            .env("PROOT_NO_SECCOMP", "1")
+            .env("PROOT_VERBOSE", "9")
+            .env("PROOT_IGNORE_MISSING_BINDINGS", "1")
+            .env("PROOT_F2FS_WORKAROUND", "1")
+            .env("PROOT_DONT_POLLUTE_ROOTFS", "0")
+            .env("PROOT_ANDROID_DATA_DIR", "/data/data/app.polarbear")
             .arg("-r")
             .arg(config::ARCH_FS_ROOT)
-            .arg("-L")
-            .arg("--link2symlink")
-            .arg("--sysvipc")
-            .arg("--kill-on-exit")
-            .arg("--root-id")
-            .arg("--bind=/dev")
-            .arg("--bind=/proc")
-            .arg("--bind=/sys")
-            .arg(format!("--bind={}/tmp:/dev/shm", config::ARCH_FS_ROOT))
             .arg("--bind=/dev/urandom:/dev/random")
-            .arg("--bind=/proc/self/fd:/dev/fd")
-            .arg("--bind=/proc/self/fd/0:/dev/stdin")
-            .arg("--bind=/proc/self/fd/1:/dev/stdout")
-            .arg("--bind=/proc/self/fd/2:/dev/stderr")
-            .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.stat:/proc/stat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.uptime:/proc/uptime", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.version:/proc/version", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
-            .arg("/usr/bin/env")
-            .arg("-i");
+            .arg("/usr/bin/bash")
+            .arg("-l");
 
-        let home = if self.user == "root" {
-            "HOME=/root".to_string()
-        } else {
-            format!("HOME=/home/{}", self.user)
-        };
-        process.arg(home);
+        log::info!("Launching PRoot with envs: {:?}", process.get_envs().collect::<Vec<_>>());
 
-        process
-            .arg("LANG=C.UTF-8")
-            .arg("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
-            .arg("TMPDIR=/tmp")
-            .arg(format!("USER={}", self.user))
-            .arg(format!("LOGNAME={}", self.user));
-        if self.user == "root" {
-            process.arg("sh");
+        if self.user != "root" {
+            process.env("USER", &self.user);
+            process.env("LOGNAME", &self.user);
+            process.env("HOME", format!("/home/{}", self.user));
         } else {
-            process
-                .arg("runuser")
-                .arg("-u")
-                .arg(&self.user)
-                .arg("--")
-                .arg("sh");
+            process.env("USER", "root");
+            process.env("LOGNAME", "root");
+            process.env("HOME", "/root");
         }
+        
+        process.env("LANG", "C.UTF-8");
+        process.env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin");
+        process.env("TMPDIR", "/tmp");
         let child = process
             .arg("-c")
             .arg(&self.command)
@@ -161,7 +139,7 @@ impl ArchProcess {
                 let mut error_output = String::new();
                 let mut reader = BufReader::new(stderr);
                 reader.read_to_string(&mut error_output).unwrap();
-                if error_output.contains("fatal error: see `libproot.so --help`") {
+                if error_output.contains("fatal error: see `libproot-userland.so --help`") {
                     panic!("PRoot error: {}", error_output);
                 }
             }
