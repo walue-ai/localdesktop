@@ -304,7 +304,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                             if compositor.state.show_terminal {
                                                 compositor.state.show_calculator = false;
                                                 if !compositor.state.terminal_spawned {
-                                                    spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp weston-terminal");
+                                                    spawn_application("WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp GDK_SCALE=1.5 GDK_DPI_SCALE=1.5 FONTCONFIG_PATH=/tmp/fontconfig weston-terminal");
                                                     compositor.state.terminal_spawned = true;
                                                 }
                                             } else if !compositor.state.show_terminal && compositor.state.terminal_spawned {
@@ -323,7 +323,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 compositor.state.show_terminal = false;
                                                 if !compositor.state.calculator_spawned {
                                                     let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
-                                                    let qt_scale = (dynamic_scale * 0.8).clamp(0.4, 1.0);
+                                                    let qt_scale = (dynamic_scale * 1.2).clamp(0.6, 1.5);
                                                     let font_dpi = (96.0 * qt_scale) as i32;
                                                     
                                                     let spawn_command = format!(
@@ -500,10 +500,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
+                
+                let max_x = compositor.state.space
+                    .outputs()
+                    .fold(0, |acc, o| acc + compositor.state.space.output_geometry(o).unwrap().size.w);
+
+                let max_h_output = compositor.state.space
+                    .outputs()
+                    .max_by_key(|o| compositor.state.space.output_geometry(o).unwrap().size.h)
+                    .unwrap();
+
+                let max_y = compositor.state.space.output_geometry(max_h_output).unwrap().size.h;
+                
+                let touch_location = Point::from((event.x_transformed(max_x), event.y_transformed(max_y)));
+                
                 let state = &mut compositor.state;
-                
-                let touch_location = Point::from((event.x(), event.y()));
-                
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
@@ -527,7 +538,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::DownEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: (event.x_transformed(max_x), event.y_transformed(max_y)).into(),
                                 serial,
                                 time,
                             },
@@ -566,10 +577,21 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
+                
+                let max_x = compositor.state.space
+                    .outputs()
+                    .fold(0, |acc, o| acc + compositor.state.space.output_geometry(o).unwrap().size.w);
+
+                let max_h_output = compositor.state.space
+                    .outputs()
+                    .max_by_key(|o| compositor.state.space.output_geometry(o).unwrap().size.h)
+                    .unwrap();
+
+                let max_y = compositor.state.space.output_geometry(max_h_output).unwrap().size.h;
+                
+                let touch_location = Point::from((event.x_transformed(max_x), event.y_transformed(max_y)));
+                
                 let state = &mut compositor.state;
-                
-                let touch_location = Point::from((event.x(), event.y()));
-                
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
                 
@@ -583,7 +605,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::MotionEvent {
                                 slot: event.slot(),
-                                location: (event.x(), event.y()).into(),
+                                location: (event.x_transformed(max_x), event.y_transformed(max_y)).into(),
                                 time,
                             },
                         );
