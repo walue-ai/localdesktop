@@ -514,10 +514,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     
                     if let Some(output) = output {
                         if let Some(output_geometry) = state.space.output_geometry(output) {
-                            let transform = output.current_transform();
-                            let size = transform.invert().transform_size(output_geometry.size);
-                            transform.transform_point_in(event.position_transformed(size), &size.to_f64())
-                                + output_geometry.loc.to_f64()
+                            event.position_transformed(output_geometry.size) + output_geometry.loc.to_f64()
                         } else {
                             Point::from((event.x(), event.y()))
                         }
@@ -599,10 +596,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                     
                     if let Some(output) = output {
                         if let Some(output_geometry) = state.space.output_geometry(output) {
-                            let transform = output.current_transform();
-                            let size = transform.invert().transform_size(output_geometry.size);
-                            transform.transform_point_in(event.position_transformed(size), &size.to_f64())
-                                + output_geometry.loc.to_f64()
+                            event.position_transformed(output_geometry.size) + output_geometry.loc.to_f64()
                         } else {
                             Point::from((event.x(), event.y()))
                         }
