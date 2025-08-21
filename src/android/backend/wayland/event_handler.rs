@@ -323,7 +323,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                                 compositor.state.show_terminal = false;
                                                 if !compositor.state.calculator_spawned {
                                                     let dynamic_scale = calculate_dynamic_scale_factor(size, backend.scale_factor);
-                                                    let qt_scale = (dynamic_scale * 1.2).clamp(0.6, 1.5);
+                                                    let qt_scale = (dynamic_scale * 1.0).clamp(0.5, 1.2);
                                                     let font_dpi = (96.0 * qt_scale) as i32;
                                                     
                                                     let spawn_command = format!(
