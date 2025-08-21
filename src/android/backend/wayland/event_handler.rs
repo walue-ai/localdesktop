@@ -500,23 +500,31 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchDown { event } => {
                 let compositor = &mut backend.compositor;
-                
-                let max_x = compositor.state.space
-                    .outputs()
-                    .fold(0, |acc, o| acc + compositor.state.space.output_geometry(o).unwrap().size.w);
-
-                let max_h_output = compositor.state.space
-                    .outputs()
-                    .max_by_key(|o| compositor.state.space.output_geometry(o).unwrap().size.h)
-                    .unwrap();
-
-                let max_y = compositor.state.space.output_geometry(max_h_output).unwrap().size.h;
-                
-                let touch_location = Point::from((event.x_transformed(max_x), event.y_transformed(max_y)));
-                
                 let state = &mut compositor.state;
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
+                
+                let touch_location = if should_handle_egui {
+                    Point::from((event.x(), event.y()))
+                } else {
+                    let output = state.space
+                        .outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
+                    
+                    if let Some(output) = output {
+                        if let Some(output_geometry) = state.space.output_geometry(output) {
+                            let transform = output.current_transform();
+                            let size = transform.invert().transform_size(output_geometry.size);
+                            transform.transform_point_in(event.position_transformed(size), &size.to_f64())
+                                + output_geometry.loc.to_f64()
+                        } else {
+                            Point::from((event.x(), event.y()))
+                        }
+                    } else {
+                        Point::from((event.x(), event.y()))
+                    }
+                };
                 
                 if should_handle_egui {
                     state.egui_state.handle_pointer_motion(touch_location);
@@ -538,7 +546,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::DownEvent {
                                 slot: event.slot(),
-                                location: (event.x_transformed(max_x), event.y_transformed(max_y)).into(),
+                                location: touch_location.into(),
                                 serial,
                                 time,
                             },
@@ -577,23 +585,31 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
             }
             InputEvent::TouchMotion { event } => {
                 let compositor = &mut backend.compositor;
-                
-                let max_x = compositor.state.space
-                    .outputs()
-                    .fold(0, |acc, o| acc + compositor.state.space.output_geometry(o).unwrap().size.w);
-
-                let max_h_output = compositor.state.space
-                    .outputs()
-                    .max_by_key(|o| compositor.state.space.output_geometry(o).unwrap().size.h)
-                    .unwrap();
-
-                let max_y = compositor.state.space.output_geometry(max_h_output).unwrap().size.h;
-                
-                let touch_location = Point::from((event.x_transformed(max_x), event.y_transformed(max_y)));
-                
                 let state = &mut compositor.state;
                 let wants_pointer = state.egui_state.wants_pointer();
                 let should_handle_egui = wants_pointer || (!state.show_terminal && !state.show_calculator);
+                
+                let touch_location = if should_handle_egui {
+                    Point::from((event.x(), event.y()))
+                } else {
+                    let output = state.space
+                        .outputs()
+                        .find(|output| output.name().starts_with("eDP"))
+                        .or_else(|| state.space.outputs().next());
+                    
+                    if let Some(output) = output {
+                        if let Some(output_geometry) = state.space.output_geometry(output) {
+                            let transform = output.current_transform();
+                            let size = transform.invert().transform_size(output_geometry.size);
+                            transform.transform_point_in(event.position_transformed(size), &size.to_f64())
+                                + output_geometry.loc.to_f64()
+                        } else {
+                            Point::from((event.x(), event.y()))
+                        }
+                    } else {
+                        Point::from((event.x(), event.y()))
+                    }
+                };
                 
                 if should_handle_egui {
                     state.egui_state.handle_pointer_motion(touch_location);
@@ -605,7 +621,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                             Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                             &touch::MotionEvent {
                                 slot: event.slot(),
-                                location: (event.x_transformed(max_x), event.y_transformed(max_y)).into(),
+                                location: touch_location.into(),
                                 time,
                             },
                         );
