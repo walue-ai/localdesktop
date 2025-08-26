@@ -64,8 +64,8 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                                 renderer,
                                 surface.wl_surface(),
                                 (0, 0),
-                                1.0,
-                                1.0,
+                                0.7,
+                                0.7,
                                 Kind::Unspecified,
                             )
                         })
@@ -312,7 +312,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         refresh: 60000,
                     }), // the resolution mode,
                     Some(Transform::Normal), // global screen transformation
-                    Some(Scale::Fractional(scale_factor)), // global screen scaling factor
+                    Some(Scale::Fractional(scale_factor * 0.7)), // global screen scaling factor
                     Some((0, 0).into()),     // output position
                 );
             }
