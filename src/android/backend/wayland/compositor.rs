@@ -238,7 +238,7 @@ impl Compositor {
             show_terminal: false,
             terminal_spawned: false,
             terminal_surface_elements: Vec::new(),
-            show_calculator: false,
+            show_calculator: true,
             calculator_spawned: false,
             calculator_surface_elements: Vec::new(),
         };
