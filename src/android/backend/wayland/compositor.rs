@@ -1,14 +1,9 @@
 use super::bind::bind_socket;
-use crate::{
-    android::backend::wayland::element::WindowElement, core::logging::PolarBearExpectation,
-};
-use crate::android::backend::wayland::egui::EguiState;
-use smithay::utils::Rectangle;
+use crate::core::logging::PolarBearExpectation;
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     delegate_compositor, delegate_data_device, delegate_output, delegate_seat, delegate_shm,
     delegate_xdg_shell,
-    desktop::Space,
     input::{self, keyboard::KeyboardHandle, touch::TouchHandle, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
@@ -65,14 +60,6 @@ pub struct State {
     pub data_device_state: DataDeviceState,
     pub seat_state: SeatState<Self>,
     pub size: Size<i32, Logical>,
-    pub space: Space<WindowElement>,
-    pub egui_state: EguiState,
-    pub show_terminal: bool,
-    pub terminal_spawned: bool,
-    pub terminal_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
-    pub show_calculator: bool,
-    pub calculator_spawned: bool,
-    pub calculator_surface_elements: Vec<smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<smithay::backend::renderer::glow::GlowRenderer>>,
 }
 
 impl BufferHandler for State {
@@ -85,8 +72,8 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        log::info!("New toplevel surface created - terminal surface may be ready");
         surface.with_pending_state(|state| {
+            state.size.replace(self.size);
             state.states.set(xdg_toplevel::State::Activated);
         });
         surface.send_configure();
@@ -135,7 +122,6 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        log::info!("Surface committed - buffer ready for rendering");
         on_commit_buffer_handler::<Self>(surface);
     }
 }
@@ -233,14 +219,6 @@ impl Compositor {
             data_device_state: DataDeviceState::new::<State>(&dh),
             seat_state,
             size: (1920, 1080).into(),
-            space: Space::default(),
-            egui_state: EguiState::new(Rectangle::from_size((1920, 1080).into())),
-            show_terminal: false,
-            terminal_spawned: false,
-            terminal_surface_elements: Vec::new(),
-            show_calculator: true,
-            calculator_spawned: false,
-            calculator_surface_elements: Vec::new(),
         };
 
         Ok(Compositor {

@@ -68,7 +68,6 @@ impl ApplicationHandler for PolarBearApp {
                     refresh: 60000,
                 });
 
-                backend.compositor.state.space.map_output(&output, (0, 0));
                 backend.compositor.output.replace(output);
 
                 launch();

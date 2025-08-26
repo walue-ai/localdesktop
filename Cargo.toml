@@ -23,7 +23,6 @@ winit = { version = "0.30.11", features = [
     "android-native-activity",
     "wayland",
 ] }
-egui = "0.32"
 xkbcommon = "0.7"
 wayland-protocols = "0.32.6"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
@@ -47,7 +46,6 @@ smithay = { version = "0.5.0", default-features = false, features = [
     "wayland-server",
     "renderer_glow",
     "wayland_frontend",
-    "desktop",
 ] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies] # Deps used only for setting up cross testing
@@ -64,7 +62,6 @@ toml = "0.8.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tempfile = "3.20.0"
-egui_glow = "0.32.0"
 
 [patch.crates-io]
 smithay = { path = "patches/smithay" }

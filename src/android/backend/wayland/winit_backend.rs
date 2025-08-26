@@ -29,7 +29,6 @@ use smithay::{
         },
         renderer::{
             gles::{GlesError, GlesRenderer},
-            glow::GlowRenderer,
             Bind,
         },
         SwapBuffersError,
@@ -104,7 +103,7 @@ fn create_egl_display(
 /// trait, from a given [`WindowAttributes`] struct, as well as given
 /// [`GlAttributes`] for further customization of the rendering pipeline and a
 /// corresponding [`WinitEventLoop`].
-pub fn bind(event_loop: &ActiveEventLoop) -> WinitGraphicsBackend<GlowRenderer> {
+pub fn bind(event_loop: &ActiveEventLoop) -> WinitGraphicsBackend<GlesRenderer> {
     #[allow(deprecated)]
     let window = Arc::new(
         event_loop
@@ -160,9 +159,8 @@ pub fn bind(event_loop: &ActiveEventLoop) -> WinitGraphicsBackend<GlowRenderer> 
         Err(error) => panic!("Failed to get window handle: {:?}", error),
     };
 
-    let gles_renderer =
+    let renderer =
         unsafe { GlesRenderer::new(context) }.pb_expect("Failed to create GLES Renderer");
-    let renderer = GlowRenderer::from(gles_renderer);
     let damage_tracking = display.supports_damage();
 
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
