@@ -172,7 +172,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                         &touch::DownEvent {
                             slot: event.slot(),
-                            location: (event.x(), event.y()).into(),
+                            location: (event.x() * 0.3, event.y() * 0.3).into(),
                             serial,
                             time,
                         },
@@ -205,7 +205,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                         &touch::MotionEvent {
                             slot: event.slot(),
-                            location: (event.x(), event.y()).into(),
+                            location: (event.x() * 0.3, event.y() * 0.3).into(),
                             time,
                         },
                     );
@@ -221,7 +221,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         &mut compositor.state,
                         Some((surface.wl_surface().clone(), (0f64, 0f64).into())),
                         &pointer::MotionEvent {
-                            location: (event.x(), event.y()).into(),
+                            location: (event.x() * 0.3, event.y() * 0.3).into(),
                             serial,
                             time: event.time_msec(),
                         },
