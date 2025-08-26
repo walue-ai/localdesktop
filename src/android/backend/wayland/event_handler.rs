@@ -75,7 +75,7 @@ pub fn handle(event: CentralizedEvent, backend: &mut WaylandBackend, event_loop:
                         .render(&mut framebuffer, size, Transform::Flipped180)
                         .unwrap();
                     frame
-                        .clear(Color32F::new(0.1, 0.0, 0.0, 1.0), &[damage])
+                        .clear(Color32F::new(0.0, 0.0, 0.0, 1.0), &[damage])
                         .unwrap();
                     draw_render_elements(&mut frame, 1.0, &elements, &[damage]).unwrap();
                     // We rely on the nested compositor to do the sync for us
