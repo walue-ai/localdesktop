@@ -72,7 +72,7 @@ fn default_install() -> String {
 }
 
 fn default_launch() -> String {
-    "true".to_string()
+    "WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/tmp QT_SCALE_FACTOR=1.5 QT_AUTO_SCREEN_SCALE_FACTOR=0 QT_FONT_DPI=144 QT_WAYLAND_FORCE_DPI=144 QT_ENABLE_HIGHDPI_SCALING=0 QT_SCREEN_SCALE_FACTORS=1.5 GDK_SCALE=1.5 GDK_DPI_SCALE=1.5 FONTCONFIG_PATH=/tmp/fontconfig FREETYPE_PROPERTIES=truetype:interpreter-version=40 kcalc".to_string()
 }
 
 impl Default for CommandConfig {
