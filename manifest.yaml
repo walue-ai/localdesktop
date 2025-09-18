@@ -8,7 +8,7 @@ android:
   manifest:
     package: app.polarbear
     sdk:
-      min_sdk_version: 21
+      min_sdk_version: 23
       target_sdk_version: 33
     application:
       label: "Local Desktop"
@@ -18,6 +18,3 @@ android:
       - name: android.permission.INTERNET
       - name: android.permission.ACCESS_NETWORK_STATE
       - name: android.permission.POST_NOTIFICATIONS
-    uses_feature:
-      - name: android.hardware.type.pc
-        required: false

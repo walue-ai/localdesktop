@@ -391,7 +391,21 @@ impl<T: 'static> EventLoop<T> {
                 {
                     let window_id = window::WindowId(WindowId);
                     let device_id = event::DeviceId(DeviceId(motion_event.device_id()));
-                    let button = motion_event.action_button();
+                    let button = match action {
+                        MotionAction::ButtonPress | MotionAction::ButtonRelease => {
+                            let button_state = motion_event.button_state();
+                            if button_state.primary() {
+                                Button::Primary
+                            } else if button_state.secondary() {
+                                Button::Secondary
+                            } else if button_state.teriary() {
+                                Button::Tertiary
+                            } else {
+                                Button::Primary // Default fallback
+                            }
+                        },
+                        _ => Button::Primary, // Default for other actions
+                    };
 
                     // Mouse move (hover or drag)
                     match action {

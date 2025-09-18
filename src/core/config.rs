@@ -15,6 +15,19 @@ pub const ARCH_FS_ROOT: &str = "/data/local/tmp/arch";
 
 pub const ARCH_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/archlinux-aarch64-pd-v4.22.1.tar.xz";
 
+pub const VOID_FS_ROOT: &str = "/data/data/app.polarbear/files/void";
+#[cfg(test)]
+pub const VOID_FS_ROOT: &str = "/data/local/tmp/void";
+
+pub const VOID_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.22.1/void-aarch64-pd-v4.22.1.tar.xz";
+
+#[cfg(not(test))]
+pub const ALPINE_FS_ROOT: &str = "/data/data/app.polarbear/files/alpine";
+#[cfg(test)]
+pub const ALPINE_FS_ROOT: &str = "/data/local/tmp/alpine";
+
+pub const ALPINE_FS_ARCHIVE: &str = "https://github.com/termux/proot-distro/releases/download/v4.25.0/alpine-aarch64-pd-v4.25.0.tar.xz";
+
 pub const WAYLAND_SOCKET_NAME: &str = "wayland-0";
 
 pub const MAX_PANEL_LOG_ENTRIES: usize = 100;
@@ -38,6 +51,9 @@ pub struct LocalConfig {
     /// => So make sure that every config group has a `#[serde(default)]` attribute to avoid invalid sections breaking unrelated parts of the config.
     #[serde(default)]
     pub command: CommandConfig,
+    
+    #[serde(default)]
+    pub distribution: DistributionConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,6 +69,36 @@ impl Default for UserConfig {
     }
 }
 
+impl Default for DistributionConfig {
+    fn default() -> Self {
+        Self {
+            name: "arch".to_string(),
+        }
+    }
+}
+
+impl CommandConfig {
+    pub fn get_effective_commands(&self, distribution: &str) -> (String, String, String) {
+        match distribution {
+            "void" => (
+                if self.check.is_empty() { default_void_check() } else { self.check.clone() },
+                if self.install.is_empty() { default_void_install() } else { self.install.clone() },
+                if self.launch.is_empty() { default_void_launch() } else { self.launch.clone() },
+            ),
+            "alpine" => (
+                if self.check.is_empty() { default_alpine_check() } else { self.check.clone() },
+                if self.install.is_empty() { default_alpine_install() } else { self.install.clone() },
+                if self.launch.is_empty() { default_alpine_launch() } else { self.launch.clone() },
+            ),
+            _ => (
+                if self.check.is_empty() { default_check() } else { self.check.clone() },
+                if self.install.is_empty() { default_install() } else { self.install.clone() },
+                if self.launch.is_empty() { default_launch() } else { self.launch.clone() },
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandConfig {
     #[serde(default = "default_check")]
@@ -61,6 +107,11 @@ pub struct CommandConfig {
     pub install: String,
     #[serde(default = "default_launch")]
     pub launch: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DistributionConfig {
+    pub name: String,
 }
 
 fn default_check() -> String {
@@ -74,6 +125,30 @@ fn default_install() -> String {
 fn default_launch() -> String {
     "XDG_RUNTIME_DIR=/tmp Xwayland -hidpi :1 2>&1 & while [ ! -e /tmp/.X11-unix/X1 ]; do sleep 0.1; done; XDG_SESSION_TYPE=x11 DISPLAY=:1 dbus-launch startxfce4 2>&1"
                 .to_string()
+}
+
+fn default_void_check() -> String {
+    "xbps-query gtk+3 && xbps-query gtk4 && xbps-query libadwaita && xbps-query gnome-calculator".to_string()
+}
+
+fn default_void_install() -> String {
+    "xbps-install -Su && xbps-install -y gtk+3 gtk4 libadwaita libhandy gnome-calculator gnome-disk-utility wayland-devel mesa-dri dbus gtk4-demo".to_string()
+}
+
+fn default_void_launch() -> String {
+    "dbus-daemon --session --fork".to_string()
+}
+
+fn default_alpine_check() -> String {
+    "apk info xorg-server && apk info xfce4 && apk info onboard".to_string()
+}
+
+fn default_alpine_install() -> String {
+    "apk update && apk add xorg-server xfce4 xfce4-terminal onboard dbus mesa-dri-gallium".to_string()
+}
+
+fn default_alpine_launch() -> String {
+    "XDG_RUNTIME_DIR=/tmp Xorg -noreset +extension GLX +extension RANDR +extension RENDER :1 2>&1 & while [ ! -e /tmp/.X11-unix/X1 ]; do sleep 0.1; done; XDG_SESSION_TYPE=x11 DISPLAY=:1 dbus-launch startxfce4 2>&1".to_string()
 }
 
 impl Default for CommandConfig {
@@ -162,15 +237,21 @@ fn process_config_file(full_config_path: String) -> Vec<String> {
 }
 
 pub fn save_config(config: &LocalConfig) {
-    // If Arch FS does not exist or is empty, return early as we don't want to accidentally scaffold the /etc folder insi
-    if Path::new(ARCH_FS_ROOT)
+    let fs_root = match config.distribution.name.as_str() {
+        "void" => VOID_FS_ROOT,
+        "alpine" => ALPINE_FS_ROOT,
+        _ => ARCH_FS_ROOT,
+    };
+    
+    // If the target FS does not exist or is empty, return early as we don't want to accidentally scaffold the /etc folder
+    if Path::new(fs_root)
         .read_dir()
         .map_or(true, |mut d| d.next().is_none())
     {
         return;
     }
 
-    let config_path = format!("{}{}", ARCH_FS_ROOT, CONFIG_FILE);
+    let config_path = format!("{}{}", fs_root, CONFIG_FILE);
     let config_path = Path::new(&config_path);
     let config_dir = config_path
         .parent()

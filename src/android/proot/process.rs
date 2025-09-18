@@ -18,6 +18,13 @@ impl ArchProcess {
     pub fn spawn(mut self) -> Self {
         // Run the command inside Proot
         let context = get_application_context();
+        let distribution = context.local_config.distribution.name.clone();
+        
+        let fs_root = match distribution.as_str() {
+            "void" => config::VOID_FS_ROOT,
+            "alpine" => config::ALPINE_FS_ROOT,
+            _ => config::ARCH_FS_ROOT,
+        };
 
         #[cfg(not(test))]
         let proot_loader = context.native_library_dir.join("libproot_loader.so");
@@ -27,9 +34,9 @@ impl ArchProcess {
         let mut process = Command::new(context.native_library_dir.join("libproot.so"));
         process
             .env("PROOT_LOADER", proot_loader)
-            .env("PROOT_TMP_DIR", config::ARCH_FS_ROOT)
+            .env("PROOT_TMP_DIR", fs_root)
             .arg("-r")
-            .arg(config::ARCH_FS_ROOT)
+            .arg(fs_root)
             .arg("-L")
             .arg("--link2symlink")
             .arg("--sysvipc")
@@ -38,49 +45,60 @@ impl ArchProcess {
             .arg("--bind=/dev")
             .arg("--bind=/proc")
             .arg("--bind=/sys")
-            .arg(format!("--bind={}/tmp:/dev/shm", config::ARCH_FS_ROOT))
-            .arg("--bind=/dev/urandom:/dev/random")
-            .arg("--bind=/proc/self/fd:/dev/fd")
-            .arg("--bind=/proc/self/fd/0:/dev/stdin")
-            .arg("--bind=/proc/self/fd/1:/dev/stdout")
-            .arg("--bind=/proc/self/fd/2:/dev/stderr")
-            .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.stat:/proc/stat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.uptime:/proc/uptime", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.version:/proc/version", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", config::ARCH_FS_ROOT))
-            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", config::ARCH_FS_ROOT))
-            .arg("/usr/bin/env")
-            .arg("-i");
-
-        let home = if self.user == "root" {
-            "HOME=/root".to_string()
-        } else {
-            format!("HOME=/home/{}", self.user)
-        };
-        process.arg(home);
-
-        process
-            .arg("LANG=C.UTF-8")
-            .arg("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
-            .arg("TMPDIR=/tmp")
-            .arg(format!("USER={}", self.user))
-            .arg(format!("LOGNAME={}", self.user));
-        if self.user == "root" {
-            process.arg("sh");
-        } else {
+            .arg(format!("--bind={}/tmp:/dev/shm", fs_root))
+            .arg("--bind=/dev/urandom:/dev/random");
+            
+        #[cfg(not(target_os = "android"))]
+        {
             process
-                .arg("runuser")
-                .arg("-u")
-                .arg(&self.user)
-                .arg("--")
-                .arg("sh");
+                .arg("--bind=/proc/self/fd:/dev/fd")
+                .arg("--bind=/proc/self/fd/0:/dev/stdin")
+                .arg("--bind=/proc/self/fd/1:/dev/stdout")
+                .arg("--bind=/proc/self/fd/2:/dev/stderr");
         }
+        
+        process
+            .arg(format!("--bind={}/proc/.loadavg:/proc/loadavg", fs_root))
+            .arg(format!("--bind={}/proc/.stat:/proc/stat", fs_root))
+            .arg(format!("--bind={}/proc/.uptime:/proc/uptime", fs_root))
+            .arg(format!("--bind={}/proc/.version:/proc/version", fs_root))
+            .arg(format!("--bind={}/proc/.vmstat:/proc/vmstat", fs_root))
+            .arg(format!("--bind={}/proc/.sysctl_entry_cap_last_cap:/proc/sys/kernel/cap_last_cap", fs_root))
+            .arg(format!("--bind={}/proc/.sysctl_inotify_max_user_watches:/proc/sys/fs/inotify/max_user_watches", fs_root))
+            .arg(format!("--bind={}/sys/.empty:/sys/fs/selinux", fs_root))
+            .arg("--bind=/system/bin:/usr/bin")
+            .arg("--bind=/system/xbin:/usr/sbin");
+
+        let home_value = if self.user == "root" {
+            "/tmp".to_string()
+        } else {
+            format!("/home/{}", self.user)
+        };
+        
+        process
+            .env("HOME", &home_value)
+            .env("LANG", "C.UTF-8")
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games:/system/bin:/system/xbin")
+            .env("TMPDIR", "/tmp")
+            .env("XDG_RUNTIME_DIR", "/tmp")
+            .env("WAYLAND_DISPLAY", "wayland-0")
+            .env("XDG_SESSION_TYPE", "wayland")
+            .env("USER", &self.user)
+            .env("LOGNAME", &self.user);
+            
+        let command_parts: Vec<&str> = self.command.split_whitespace().collect();
+        if !command_parts.is_empty() {
+            let main_command = command_parts[0];
+            process.arg(main_command);
+            
+            for arg in &command_parts[1..] {
+                process.arg(arg);
+            }
+        } else {
+            process.arg("echo").arg("No command specified");
+        }
+        
         let child = process
-            .arg("-c")
-            .arg(&self.command)
             .stdout(Stdio::piped())
             .stderr(if self.panic_on_error {
                 Stdio::piped()

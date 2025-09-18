@@ -10,10 +10,11 @@ pub fn launch() {
 
         let local_config = get_application_context().local_config;
         let username = local_config.user.username;
+        let distribution = local_config.distribution.name.clone();
 
-        let full_launch_command = local_config.command.launch;
+        let (_check, _install, launch) = local_config.command.get_effective_commands(&distribution);
 
-        ArchProcess::exec_as(&full_launch_command, &username).with_log(|it| {
+        ArchProcess::exec_as(&launch, &username).with_log(|it| {
             log::info!("{}", it);
         });
     });
